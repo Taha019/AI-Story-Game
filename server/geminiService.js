@@ -4,8 +4,10 @@ export class GeminiService {
       throw new Error('Gemini API key is required to run the game.');
     }
     this.apiKey = apiKey;
+    // Updated endpoint model name:
     this.apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
   }
+  // ... rest of the file stays the same
 
   async generatePrompt() {
     const promptText = `Generate 1 creative short story title, 1 literary genre, and 3 mandatory words/keywords. Respond strictly in JSON: {"title": "...", "genre": "...", "keywords": ["...", "...", "..."]}`;
