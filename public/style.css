@@ -1,0 +1,71 @@
+:root {
+  --bg-dark: #0f172a;
+  --card-bg: #1e293b;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --border: #334155;
+  --gold: #f59e0b;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--bg-dark);
+  color: var(--text-main);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 1rem;
+}
+
+.container {
+  width: 100%;
+  max-width: 680px;
+  background: var(--card-bg);
+  padding: 2.5rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+}
+
+.view { display: none; }
+.view.active { display: block; }
+
+h1, h2, h3 { margin-top: 0; }
+.badge { background: var(--accent); color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; }
+.form-group { margin-bottom: 1.2rem; }
+label { display: block; margin-bottom: 0.4rem; color: var(--text-muted); font-size: 0.9rem; }
+
+input, select, textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #0f172a;
+  color: white;
+  box-sizing: border-box;
+}
+
+button {
+  width: 100%;
+  padding: 0.8rem;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+  margin-top: 0.5rem;
+}
+
+button:hover { background: var(--accent-hover); }
+.metric-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+.metric-row input { flex: 1; }
+.tag-list { display: flex; gap: 0.5rem; margin: 1rem 0; flex-wrap: wrap; }
+.tag { background: #334155; padding: 0.3rem 0.6rem; border-radius: 20px; font-size: 0.85rem; }
+.timer { font-size: 1.5rem; font-weight: bold; color: var(--gold); text-align: center; margin: 1rem 0; }
+.result-card { background: #0f172a; border: 1px solid var(--border); padding: 1rem; border-radius: 8px; margin-bottom: 1rem; }
+.award-card { background: #312e81; border: 1px solid #6366f1; padding: 1rem; border-radius: 8px; margin-bottom: 0.8rem; }
