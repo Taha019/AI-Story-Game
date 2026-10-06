@@ -6,6 +6,7 @@ const MAX_TIMER_DURATION_SECONDS = 1800;
 let roomCode = null;
 let playerName = null;
 let isHost = false;
+let isSharedDevice = false;
 let judgingMetrics = [];
 
 // DOM Elements
@@ -13,6 +14,10 @@ const createBtn = document.getElementById('btn-create');
 const joinBtn = document.getElementById('btn-join');
 const startBtn = document.getElementById('btn-start');
 const playerNameInput = document.getElementById('player-name');
+const playModeInput = document.getElementById('play-mode');
+const playerNameLabel = document.getElementById('player-name-label');
+const sharedPlayerNamesGroup = document.getElementById('shared-player-names-group');
+const sharedPlayerNamesInput = document.getElementById('shared-player-names');
 const joinCodeInput = document.getElementById('join-code');
 const totalRoundsInput = document.getElementById('total-rounds');
 const metricsContainer = document.getElementById('metrics-container');
@@ -43,6 +48,16 @@ if (createBtn) {
   createBtn.addEventListener('click', () => {
     playerName = playerNameInput.value.trim();
     if (!playerName) return alert('Please enter your display name.');
+    const singleDevice = playModeInput.value === 'single-device';
+    const playerNames = singleDevice
+      ? [playerName, ...sharedPlayerNamesInput.value.split(',').map((name) => name.trim()).filter(Boolean)]
+      : undefined;
+    if (singleDevice && (playerNames.length < 2 || playerNames.length > 5)) {
+      return alert('Enter 1 to 4 other player names for a total of 2 to 5 players.');
+    }
+    if (singleDevice && new Set(playerNames.map((name) => name.toLowerCase())).size !== playerNames.length) {
+      return alert('Each player needs a unique name.');
+    }
     const timerDuration = Number(timerInput.value);
     if (!Number.isInteger(timerDuration) || timerDuration < 30 || timerDuration > MAX_TIMER_DURATION_SECONDS) {
       return alert(`Timer must be between 30 and ${MAX_TIMER_DURATION_SECONDS} seconds.`);
@@ -57,8 +72,19 @@ if (createBtn) {
       timerDuration,
       genre: genreInput.value.trim(),
       keywords: keywordsInput.value.trim(),
+      singleDevice,
+      playerNames,
       metrics: metrics.length ? metrics : undefined
     });
+  });
+}
+
+if (playModeInput) {
+  playModeInput.addEventListener('change', () => {
+    const singleDevice = playModeInput.value === 'single-device';
+    sharedPlayerNamesGroup.hidden = !singleDevice;
+    playerNameLabel.innerText = singleDevice ? 'First Player Name' : 'Your Display Name';
+    playerNameInput.placeholder = singleDevice ? 'Enter the first player name' : 'Enter your display name';
   });
 }
 
@@ -207,6 +233,7 @@ socket.onmessage = (event) => {
     case 'ROOM_CREATED':
       roomCode = data.roomCode;
       isHost = true;
+      isSharedDevice = data.singleDevice === true;
       renderCriteria(data.metrics);
       updateLobby(data.players, data.timerDuration);
       if (hostRoomSettings) hostRoomSettings.style.display = '';
@@ -217,6 +244,7 @@ socket.onmessage = (event) => {
     case 'ROOM_JOINED':
       roomCode = data.roomCode;
       isHost = false;
+      isSharedDevice = false;
       renderCriteria(data.metrics);
       updateLobby(data.players, data.timerDuration);
       if (hostRoomSettings) hostRoomSettings.style.display = 'none';
@@ -235,6 +263,7 @@ socket.onmessage = (event) => {
       break;
 
     case 'ROUND_STARTED':
+      isSharedDevice = data.singleDevice === true;
       renderCriteria(data.metrics);
       storyInput.disabled = false;
       storyInput.value = '';
@@ -248,7 +277,12 @@ socket.onmessage = (event) => {
       if (roundBadge) roundBadge.innerText = `Round ${data.roundNumber}`;
       if (finishWritingBtn) finishWritingBtn.style.display = isHost ? '' : 'none';
       if (timerDisplay) timerDisplay.innerText = `${Math.floor(data.duration / 60)}:${String(data.duration % 60).padStart(2, '0')}`;
+      updateSharedTurn(data.currentPlayerName);
       showView('view-writing');
+      break;
+
+    case 'PLAYER_TURN':
+      updateSharedTurn(data.currentPlayerName);
       break;
 
     case 'TIMER_TICK':
@@ -265,6 +299,7 @@ socket.onmessage = (event) => {
       break;
 
     case 'ROUND_JUDGING':
+      document.getElementById('shared-turn-banner').hidden = true;
       storyInput.disabled = true;
       submitBtn.disabled = true;
       showView('view-judging');
@@ -297,6 +332,19 @@ socket.onmessage = (event) => {
       break;
   }
 };
+
+function updateSharedTurn(currentPlayerName) {
+  const turnBanner = document.getElementById('shared-turn-banner');
+  if (!turnBanner) return;
+  turnBanner.hidden = !isSharedDevice;
+  if (!isSharedDevice) return;
+  turnBanner.innerText = `${currentPlayerName}'s turn. Pass the device, then start writing.`;
+  storyInput.value = '';
+  storyInput.disabled = false;
+  submitBtn.disabled = false;
+  submitBtn.innerText = 'Submit Story';
+  if (timerDisplay) timerDisplay.innerText = 'Timer starting...';
+}
 
 function showWaitingRoom() {
   document.getElementById('display-room-code').innerText = roomCode;

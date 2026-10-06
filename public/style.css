@@ -9,6 +9,10 @@
   --gold: #f59e0b;
 }
 
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
   font-family: system-ui, -apple-system, sans-serif;
@@ -16,16 +20,18 @@ body {
   color: var(--text-main);
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
   min-height: 100vh;
-  padding: 1rem;
+  min-height: 100dvh;
+  padding: clamp(0.5rem, 2vw, 1rem);
 }
 
 .container {
   width: 100%;
   max-width: 680px;
+  margin: auto;
   background: var(--card-bg);
-  padding: 2.5rem;
+  padding: clamp(1rem, 5vw, 2.5rem);
   border-radius: 12px;
   border: 1px solid var(--border);
   box-shadow: 0 10px 25px rgba(0,0,0,0.3);
@@ -49,6 +55,11 @@ input, select, textarea {
   box-sizing: border-box;
 }
 
+textarea {
+  min-height: 10rem;
+  resize: vertical;
+}
+
 button {
   width: 100%;
   padding: 0.8rem;
@@ -70,3 +81,21 @@ button:hover { background: var(--accent-hover); }
 .result-card { background: #0f172a; border: 1px solid var(--border); padding: 1rem; border-radius: 8px; margin-bottom: 1rem; }
 .award-card { background: #312e81; border: 1px solid #6366f1; padding: 1rem; border-radius: 8px; margin-bottom: 0.8rem; }
 .winner-banner { background: #312e81; border: 1px solid var(--gold); border-radius: 8px; color: var(--gold); font-size: 1.2rem; font-weight: bold; padding: 1rem; text-align: center; }
+
+@media (max-width: 480px) {
+  .container {
+    border-radius: 8px;
+  }
+
+  .metric-row {
+    flex-direction: column;
+  }
+
+  #view-writing > div:first-child {
+    gap: 0.75rem;
+  }
+
+  #view-writing > div:first-child h2 {
+    font-size: 1.25rem;
+  }
+}

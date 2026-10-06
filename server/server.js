@@ -48,7 +48,18 @@ wss.on('connection', (ws) => {
 
       switch (data.type) {
         case 'CREATE_ROOM': {
-          currentPlayerName = data.playerName;
+          currentPlayerName = typeof data.playerName === 'string' ? data.playerName.trim() : '';
+          if (!currentPlayerName) throw new Error('Please enter a display name.');
+          const singleDevice = data.singleDevice === true;
+          const playerNames = singleDevice && Array.isArray(data.playerNames)
+            ? data.playerNames.map((name) => typeof name === 'string' ? name.trim() : '')
+            : [currentPlayerName];
+          if (singleDevice && (playerNames.length < 2 || playerNames.length > 5 || playerNames.some((name) => !name))) {
+            throw new Error('Enter names for 2 to 5 players.');
+          }
+          if (singleDevice && (playerNames[0] !== currentPlayerName || new Set(playerNames.map((name) => name.toLowerCase())).size !== playerNames.length)) {
+            throw new Error('Each player needs a unique name, with the first player listed first.');
+          }
           const keywords = typeof data.keywords === 'string'
             ? data.keywords.split(',').map((keyword) => keyword.trim()).filter(Boolean).slice(0, 8)
             : [];
@@ -57,6 +68,8 @@ wss.on('connection', (ws) => {
             timerDuration: data.timerDuration,
             genre: data.genre,
             keywords,
+            singleDevice,
+            playerNames,
             metrics: data.metrics
           });
           currentRoomCode = room.code;
@@ -67,6 +80,7 @@ wss.on('connection', (ws) => {
             host: room.host,
             players: room.getPlayerList(),
             timerDuration: room.timerDuration,
+            singleDevice: room.singleDevice,
             metrics: room.customMetrics
           }));
           break;
@@ -147,14 +161,17 @@ wss.on('connection', (ws) => {
     if (currentRoomCode && currentPlayerName) {
       const room = gameManager.rooms.get(currentRoomCode);
       if (room) {
-        room.removePlayer(currentPlayerName);
+        const removedPlayers = [...room.players]
+          .filter(([, playerSocket]) => playerSocket === ws)
+          .map(([name]) => name);
+        removedPlayers.forEach((name) => room.removePlayer(name));
         if (room.players.size === 0) {
           if (room.timerInterval) clearInterval(room.timerInterval);
           gameManager.rooms.delete(currentRoomCode);
         } else {
           room.broadcast({
             type: 'PLAYER_LEFT',
-            playerName: currentPlayerName,
+            playerName: removedPlayers.join(', '),
             players: room.getPlayerList(),
             host: room.host
           });

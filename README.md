@@ -5,6 +5,7 @@ A real-time, multiplayer AI storytelling game. A host creates a room, invites pl
 ## Features
 
 - Create and join multiplayer rooms with a four-digit code (up to five players).
+- Choose a shared-device mode where 2 to 5 players take timed turns on one device.
 - Choose from one to ten rounds.
 - Set the writing timer from 30 to 1,800 seconds, either when creating the room or in the waiting room.
 - Optionally choose a genre and comma-separated keywords.
@@ -49,7 +50,7 @@ AI features use the Groq Chat Completions API. The default model is `openai/gpt-
 
 ## Play
 
-1. Enter a display name. The host chooses the round count, timer, optional genre and keywords, and judging criteria before creating the room.
+1. Choose whether players use separate devices or one shared device. For shared play, enter the first player's name and the other players' names; each player gets a timed writing turn. The host also chooses the round count, timer, optional genre and keywords, and judging criteria before creating the room.
 2. Share the four-digit room code. Other players enter their display names and the code to join while the room is waiting.
 3. The host starts the first round. Players write and submit their stories before the timer ends; any remaining draft is submitted automatically at time-up.
 4. After judging, the host can start the next round or finish the game. The host can also finish early during writing.

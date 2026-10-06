@@ -4,6 +4,7 @@ export class Room {
   constructor(code, hostPlayerName, options = {}) {
     this.code = code;
     this.host = hostPlayerName;
+    this.singleDevice = options.singleDevice === true;
     this.players = new Map(); // playerName -> socket
     this.timerDuration = 300; // Default duration in seconds
     this.setTimerDuration(options.timerDuration);
@@ -75,7 +76,8 @@ export class Room {
 
   broadcast(message) {
     const payload = JSON.stringify(message);
-    for (const socket of this.players.values()) {
+    const sockets = new Set(this.players.values());
+    for (const socket of sockets) {
       if (socket.readyState === 1) { // WebSocket.OPEN
         socket.send(payload);
       }
@@ -121,6 +123,9 @@ export class GameManager {
 
     const room = new Room(code, hostPlayerName, options);
     room.addPlayer(hostPlayerName, socket);
+    if (room.singleDevice) {
+      for (const playerName of (options.playerNames || [hostPlayerName]).slice(1)) room.addPlayer(playerName, socket);
+    }
     this.rooms.set(code, room);
     return room;
   }
@@ -128,6 +133,7 @@ export class GameManager {
   joinRoom(code, playerName, socket) {
     const room = this.rooms.get(code);
     if (!room) throw new Error('Room not found.');
+    if (room.singleDevice) throw new Error('This game is using one shared device.');
     if (room.status !== 'WAITING') throw new Error('Game already in progress.');
     if (room.players.has(playerName)) throw new Error('Player name taken in this room.');
 
@@ -162,6 +168,8 @@ export class GameManager {
     if (!isNextRound) room.roundNumber = 1;
     room.submissions.clear();
     room.endGameRequested = false;
+    room.currentTurnIndex = 0;
+    room.currentTurnName = room.singleDevice ? room.getPlayerList()[0] : null;
 
     // Request prompt/topic generation from AI service
     room.currentPrompt = await this.geminiService.generatePrompt({
@@ -179,10 +187,15 @@ export class GameManager {
       roundNumber: room.roundNumber,
       totalRounds: room.totalRounds,
       metrics: room.customMetrics,
+      singleDevice: room.singleDevice,
+      currentPlayerName: room.currentTurnName,
       status: room.status
     });
 
-    // Start countdown broadcast interval
+    this.startTurnTimer(roomCode, room);
+  }
+
+  startTurnTimer(roomCode, room) {
     if (room.timerInterval) clearInterval(room.timerInterval);
     room.timerInterval = setInterval(() => {
       room.timeRemaining -= 1;
@@ -198,7 +211,11 @@ export class GameManager {
         room.broadcast({ type: 'ROUND_TIME_UP' });
         room.submissionTimeout = setTimeout(() => {
           room.submissionTimeout = null;
-          this.evaluateRound(roomCode);
+          if (room.singleDevice && room.currentTurnName && !room.submissions.has(room.currentTurnName)) {
+            this.submitStory(roomCode, room.host, '');
+          } else if (!room.singleDevice) {
+            this.evaluateRound(roomCode);
+          }
         }, 2000);
       }
     }, 1000);
@@ -286,25 +303,37 @@ export class GameManager {
     const room = this.rooms.get(roomCode);
     if (!room) throw new Error('Room not found.');
     if (room.status !== 'WRITING') throw new Error('Not in writing phase.');
+    if (!room.players.has(playerName)) throw new Error('Player is not in this room.');
 
-    if (!room.submissions.has(playerName)) {
-      room.storyHistory.push({ playerName, story, roundNumber: room.roundNumber });
-    }
-    room.submissions.set(playerName, story);
+    const submittingPlayer = room.singleDevice ? room.currentTurnName : playerName;
+    if (!submittingPlayer || room.submissions.has(submittingPlayer)) return;
+
+    room.storyHistory.push({ playerName: submittingPlayer, story, roundNumber: room.roundNumber });
+    room.submissions.set(submittingPlayer, story);
 
     room.broadcast({
       type: 'PLAYER_SUBMITTED',
-      playerName,
+      playerName: submittingPlayer,
       submittedCount: room.submissions.size,
       totalPlayers: room.players.size
     });
 
-    // Automatically trigger evaluations if all players finish before timer expiration
     if (room.submissions.size >= room.players.size) {
       if (room.timerInterval) clearInterval(room.timerInterval);
+      room.timerInterval = null;
       if (room.submissionTimeout) clearTimeout(room.submissionTimeout);
       room.submissionTimeout = null;
       this.evaluateRound(roomCode);
+    } else if (room.singleDevice) {
+      if (room.timerInterval) clearInterval(room.timerInterval);
+      room.timerInterval = null;
+      if (room.submissionTimeout) clearTimeout(room.submissionTimeout);
+      room.submissionTimeout = null;
+      room.currentTurnIndex += 1;
+      room.currentTurnName = room.getPlayerList()[room.currentTurnIndex];
+      room.broadcast({ type: 'PLAYER_TURN', currentPlayerName: room.currentTurnName });
+      room.timeRemaining = room.timerDuration;
+      this.startTurnTimer(roomCode, room);
     }
   }
 
