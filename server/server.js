@@ -49,7 +49,15 @@ wss.on('connection', (ws) => {
       switch (data.type) {
         case 'CREATE_ROOM': {
           currentPlayerName = data.playerName;
-          const room = gameManager.createRoom(currentPlayerName, ws, data.totalRounds);
+          const keywords = typeof data.keywords === 'string'
+            ? data.keywords.split(',').map((keyword) => keyword.trim()).filter(Boolean).slice(0, 8)
+            : [];
+          const room = gameManager.createRoom(currentPlayerName, ws, {
+            totalRounds: data.totalRounds,
+            timerDuration: data.timerDuration,
+            genre: data.genre,
+            keywords
+          });
           currentRoomCode = room.code;
 
           ws.send(JSON.stringify({
@@ -108,6 +116,12 @@ wss.on('connection', (ws) => {
         case 'NEXT_ROUND': {
           if (!currentRoomCode || !currentPlayerName) return;
           await gameManager.nextRound(currentRoomCode, currentPlayerName);
+          break;
+        }
+
+        case 'END_GAME': {
+          if (!currentRoomCode || !currentPlayerName) return;
+          await gameManager.endGame(currentRoomCode, currentPlayerName);
           break;
         }
 

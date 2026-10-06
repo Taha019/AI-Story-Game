@@ -1,26 +1,41 @@
 import { GeminiService } from './geminiService.js';
 
 export class Room {
-  constructor(code, hostPlayerName, totalRounds = 3) {
+  constructor(code, hostPlayerName, options = {}) {
     this.code = code;
     this.host = hostPlayerName;
     this.players = new Map(); // playerName -> socket
     this.timerDuration = 300; // Default duration in seconds
-    this.totalRounds = [1, 2, 3, 5].includes(Number(totalRounds)) ? Number(totalRounds) : 3;
+    this.setTimerDuration(options.timerDuration);
+    this.totalRounds = [1, 2, 3, 5].includes(Number(options.totalRounds)) ? Number(options.totalRounds) : 3;
+    this.genre = typeof options.genre === 'string' ? options.genre.trim().slice(0, 80) || null : null;
+    this.keywords = Array.isArray(options.keywords)
+      ? options.keywords.filter((keyword) => typeof keyword === 'string' && keyword.trim()).slice(0, 8)
+      : [];
     this.roundNumber = 0;
     this.scoreTotals = new Map();
-    this.status = 'WAITING'; // WAITING, WRITING, JUDGING, FINISHED
+    this.status = 'WAITING'; // WAITING, WRITING, JUDGING, FINISHED, GAME_OVER
     this.currentPrompt = null;
     this.submissions = new Map(); // playerName -> story text string
+    this.storyHistory = [];
+    this.endGameRequested = false;
     
     // Custom criteria evaluated on a 1-10 integer scale
     this.customMetrics = [
       { key: 'creativity', name: 'Creativity', description: 'Originality and imaginative narrative elements.' },
       { key: 'coherence', name: 'Coherence', description: 'Logical story flow and grammar quality.' },
-      { key: 'keywordUsage', name: 'Keyword Usage', description: 'Seamless incorporation of required words.' }
+      { key: 'adherence', name: 'Adherence', description: 'Fit with the story title and prompt.' }
     ];
+    if (this.keywords.length) {
+      this.customMetrics.push({
+        key: 'keywordUsage',
+        name: 'Keyword Usage',
+        description: 'Seamless incorporation of the required words.'
+      });
+    }
     
     this.timerInterval = null;
+    this.submissionTimeout = null;
     this.timeRemaining = 0;
   }
 
@@ -64,13 +79,13 @@ export class GameManager {
     this.geminiService = new GeminiService();
   }
 
-  createRoom(hostPlayerName, socket, totalRounds) {
+  createRoom(hostPlayerName, socket, options = {}) {
     let code;
     do {
       code = Math.floor(1000 + Math.random() * 9000).toString();
     } while (this.rooms.has(code));
 
-    const room = new Room(code, hostPlayerName, totalRounds);
+    const room = new Room(code, hostPlayerName, options);
     room.addPlayer(hostPlayerName, socket);
     this.rooms.set(code, room);
     return room;
@@ -112,15 +127,21 @@ export class GameManager {
     room.status = 'WRITING';
     if (!isNextRound) room.roundNumber = 1;
     room.submissions.clear();
+    room.endGameRequested = false;
 
     // Request prompt/topic generation from AI service
-    room.currentPrompt = await this.geminiService.generatePrompt();
+    room.currentPrompt = await this.geminiService.generatePrompt({
+      genre: room.genre,
+      keywords: room.keywords
+    });
     room.timeRemaining = room.timerDuration;
 
     room.broadcast({
       type: 'ROUND_STARTED',
       prompt: room.currentPrompt,
       duration: room.timerDuration,
+      roundNumber: room.roundNumber,
+      totalRounds: room.totalRounds,
       status: room.status
     });
 
@@ -136,7 +157,12 @@ export class GameManager {
 
       if (room.timeRemaining <= 0) {
         clearInterval(room.timerInterval);
-        this.evaluateRound(roomCode);
+        room.timerInterval = null;
+        room.broadcast({ type: 'ROUND_TIME_UP' });
+        room.submissionTimeout = setTimeout(() => {
+          room.submissionTimeout = null;
+          this.evaluateRound(roomCode);
+        }, 2000);
       }
     }, 1000);
   }
@@ -148,12 +174,7 @@ export class GameManager {
     if (room.status !== 'FINISHED') throw new Error('The current round is not finished.');
 
     if (room.roundNumber >= room.totalRounds) {
-      const standings = Array.from(room.scoreTotals, ([name, totalScore]) => ({
-        playerName: name,
-        totalScore
-      })).sort((first, second) => second.totalScore - first.totalScore);
-
-      room.broadcast({ type: 'GAME_OVER', standings });
+      await this.completeGame(room);
       return;
     }
 
@@ -162,11 +183,76 @@ export class GameManager {
     await this.startRound(roomCode, playerName, true);
   }
 
+  async endGame(roomCode, playerName) {
+    const room = this.rooms.get(roomCode);
+    if (!room) throw new Error('Room not found.');
+    if (room.host !== playerName) throw new Error('Only the room host can finish the game.');
+    if (room.roundNumber === 0) throw new Error('Start the game before finishing it.');
+    if (room.status === 'GAME_OVER') return;
+
+    if (room.status === 'JUDGING') {
+      room.endGameRequested = true;
+      room.broadcast({ type: 'GAME_END_PENDING' });
+      return;
+    }
+
+    if (room.status === 'WRITING') {
+      room.endGameRequested = true;
+      if (room.timerInterval) clearInterval(room.timerInterval);
+      if (room.submissionTimeout) clearTimeout(room.submissionTimeout);
+      room.submissionTimeout = null;
+      await this.evaluateRound(roomCode);
+      return;
+    }
+
+    if (room.status === 'FINISHED' || room.status === 'WAITING') {
+      await this.completeGame(room);
+      return;
+    }
+
+    throw new Error('The game cannot be finished in its current state.');
+  }
+
+  async completeGame(room) {
+    if (room.status === 'GAME_OVER') return;
+    if (room.timerInterval) clearInterval(room.timerInterval);
+    if (room.submissionTimeout) clearTimeout(room.submissionTimeout);
+    room.submissionTimeout = null;
+
+    const standings = Array.from(room.scoreTotals, ([name, totalScore]) => ({
+      playerName: name,
+      totalScore
+    })).sort((first, second) => second.totalScore - first.totalScore);
+
+    room.status = 'GAME_OVER';
+    let report = { awards: [], playerTraits: [] };
+    if (room.storyHistory.length) {
+      try {
+        report = await this.geminiService.generateGameAwards(room.storyHistory, standings);
+      } catch (err) {
+        report.error = 'AI awards and player traits could not be generated.';
+      }
+    } else {
+      report.error = 'No stories were submitted, so awards and player traits are unavailable.';
+    }
+
+    room.broadcast({
+      type: 'GAME_OVER',
+      standings,
+      awards: report.awards || [],
+      playerTraits: report.playerTraits || [],
+      reportError: report.error || null
+    });
+  }
+
   submitStory(roomCode, playerName, story) {
     const room = this.rooms.get(roomCode);
     if (!room) throw new Error('Room not found.');
     if (room.status !== 'WRITING') throw new Error('Not in writing phase.');
 
+    if (!room.submissions.has(playerName)) {
+      room.storyHistory.push({ playerName, story, roundNumber: room.roundNumber });
+    }
     room.submissions.set(playerName, story);
 
     room.broadcast({
@@ -179,6 +265,8 @@ export class GameManager {
     // Automatically trigger evaluations if all players finish before timer expiration
     if (room.submissions.size >= room.players.size) {
       if (room.timerInterval) clearInterval(room.timerInterval);
+      if (room.submissionTimeout) clearTimeout(room.submissionTimeout);
+      room.submissionTimeout = null;
       this.evaluateRound(roomCode);
     }
   }
@@ -186,6 +274,8 @@ export class GameManager {
   async evaluateRound(roomCode) {
     const room = this.rooms.get(roomCode);
     if (!room || room.status === 'JUDGING') return;
+    if (room.submissionTimeout) clearTimeout(room.submissionTimeout);
+    room.submissionTimeout = null;
 
     room.status = 'JUDGING';
     room.broadcast({ type: 'ROUND_JUDGING', status: 'Evaluating stories...' });
@@ -197,7 +287,7 @@ export class GameManager {
 
     if (submissionsList.length === 0) {
       room.status = 'FINISHED';
-      room.broadcast({ type: 'GAME_OVER', standings: [], winner: 'No submissions received.' });
+      await this.completeGame(room);
       return;
     }
 
@@ -216,6 +306,10 @@ export class GameManager {
           evaluation.playerName,
           (room.scoreTotals.get(evaluation.playerName) || 0) + roundScore
         );
+        const storyRecord = room.storyHistory.find((submission) =>
+          submission.playerName === evaluation.playerName && submission.roundNumber === room.roundNumber
+        );
+        if (storyRecord) storyRecord.totalScore = roundScore;
       }
 
       room.status = 'FINISHED';
@@ -226,7 +320,13 @@ export class GameManager {
         totalRounds: room.totalRounds,
         status: 'FINISHED'
       });
+      if (room.endGameRequested) await this.completeGame(room);
     } catch (err) {
+      if (room.endGameRequested) {
+        room.status = 'FINISHED';
+        await this.completeGame(room);
+        return;
+      }
       room.status = 'WAITING';
       room.broadcast({
         type: 'ERROR',

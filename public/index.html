@@ -28,6 +28,21 @@
       </div>
 
       <div class="form-group">
+        <label for="timer-duration-input">Writing Timer (seconds)</label>
+        <input type="number" id="timer-duration-input" value="300" min="30" max="600" step="15">
+      </div>
+
+      <div class="form-group">
+        <label for="genre-input">Genre (optional)</label>
+        <input type="text" id="genre-input" placeholder="e.g. Mystery">
+      </div>
+
+      <div class="form-group">
+        <label for="keywords-input">Keywords (optional)</label>
+        <input type="text" id="keywords-input" placeholder="Comma-separated words">
+      </div>
+
+      <div class="form-group">
         <label>Custom Judging Metrics (Max 4)</label>
         <div id="metrics-container">
           <div class="metric-row">
@@ -75,8 +90,8 @@
 
       <div class="result-card">
         <strong>Title:</strong> <span id="prompt-title">...</span><br>
-        <strong>Genre:</strong> <span id="prompt-genre">...</span><br>
-        <strong>Keywords:</strong> <span id="prompt-keywords">...</span>
+        <span id="prompt-genre-row" hidden><strong>Genre:</strong> <span id="prompt-genre"></span><br></span>
+        <span id="prompt-keywords-row" hidden><strong>Keywords:</strong> <span id="prompt-keywords"></span></span>
       </div>
 
       <div id="active-writing-area">
@@ -84,6 +99,7 @@
         <textarea id="story-input" rows="8" placeholder="Write your story here..."></textarea>
         <button id="btn-submit-story">Submit Story</button>
       </div>
+      <button id="btn-finish-writing" style="display: none;">Finish Game Now</button>
 
       <div id="spectator-area" style="display: none; text-align: center; padding: 2rem 0;">
         <p style="color: var(--text-muted)">Waiting for <strong id="current-writer-name">Player</strong> to finish writing...</p>
@@ -102,12 +118,15 @@
       <p style="text-align: center; color: var(--gold);" id="summary-round-title"></p>
       <div id="round-results-container"></div>
       <button id="btn-next-round" style="display: none;">Next Round</button>
+      <button id="btn-finish-summary" style="display: none;">Finish Game Now</button>
     </div>
 
     <!-- View 6: Final Game Standings & Awards -->
     <div id="view-final-results" class="view">
       <h1 style="text-align: center;">👑 Final Standings</h1>
       <div id="awards-container"></div>
+      <h3>Player Traits From Their Stories</h3>
+      <div id="player-traits-container"></div>
       <h3>Leaderboard Tally</h3>
       <div id="final-leaderboard-container"></div>
       <button onclick="location.reload()">Play Again</button>

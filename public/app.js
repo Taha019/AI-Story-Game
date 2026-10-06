@@ -13,8 +13,12 @@ const startBtn = document.getElementById('btn-start');
 const playerNameInput = document.getElementById('player-name');
 const joinCodeInput = document.getElementById('join-code');
 const totalRoundsInput = document.getElementById('total-rounds');
+const genreInput = document.getElementById('genre-input');
+const keywordsInput = document.getElementById('keywords-input');
 const submitBtn = document.getElementById('btn-submit-story');
 const nextRoundBtn = document.getElementById('btn-next-round');
+const finishWritingBtn = document.getElementById('btn-finish-writing');
+const finishSummaryBtn = document.getElementById('btn-finish-summary');
 const connectionStatus = document.getElementById('connection-status');
 const timerInput = document.getElementById('timer-duration-input');
 const storyInput = document.getElementById('story-input');
@@ -23,6 +27,9 @@ const playerListDisplay = document.getElementById('player-list');
 const promptTitleDisplay = document.getElementById('prompt-title');
 const promptGenreDisplay = document.getElementById('prompt-genre');
 const promptKeywordsDisplay = document.getElementById('prompt-keywords');
+const promptGenreRow = document.getElementById('prompt-genre-row');
+const promptKeywordsRow = document.getElementById('prompt-keywords-row');
+const roundBadge = document.getElementById('round-badge');
 const resultsDisplay = document.getElementById('round-results-container');
 
 if (createBtn) {
@@ -33,7 +40,10 @@ if (createBtn) {
     sendSocketMessage({
       type: 'CREATE_ROOM',
       playerName,
-      totalRounds: Number(totalRoundsInput.value)
+      totalRounds: Number(totalRoundsInput.value),
+      timerDuration: Number(timerInput.value),
+      genre: genreInput.value.trim(),
+      keywords: keywordsInput.value.trim()
     });
   });
 }
@@ -91,21 +101,38 @@ if (nextRoundBtn) {
   });
 }
 
+function requestGameFinish() {
+  if (!isHost || !confirm('Finish the game now and show final awards?')) return;
+  [finishWritingBtn, finishSummaryBtn].forEach((button) => {
+    if (button) {
+      button.disabled = true;
+      button.innerText = 'Finishing Game...';
+    }
+  });
+  sendSocketMessage({ type: 'END_GAME' });
+}
+
+if (finishWritingBtn) finishWritingBtn.addEventListener('click', requestGameFinish);
+if (finishSummaryBtn) finishSummaryBtn.addEventListener('click', requestGameFinish);
+
 // Submit Written Story
 if (submitBtn) {
-  submitBtn.addEventListener('click', () => {
-    const storyText = storyInput.value.trim();
-    if (!storyText) return alert('Please write a story before submitting!');
+  submitBtn.addEventListener('click', () => submitStory(false));
+}
 
-    sendSocketMessage({
-      type: 'SUBMIT_STORY',
-      story: storyText
-    });
+function submitStory(allowEmpty) {
+  if (submitBtn.disabled) return;
+  const storyText = storyInput.value.trim();
+  if (!storyText && !allowEmpty) return alert('Please write a story before submitting!');
 
-    submitBtn.disabled = true;
-    storyInput.disabled = true;
-    submitBtn.innerText = 'Submitted! Waiting for others...';
+  sendSocketMessage({
+    type: 'SUBMIT_STORY',
+    story: storyText
   });
+
+  submitBtn.disabled = true;
+  storyInput.disabled = true;
+  submitBtn.innerText = allowEmpty ? 'Time is up - submitted' : 'Submitted! Waiting for others...';
 }
 
 // Handle Incoming WebSocket Messages
@@ -143,14 +170,23 @@ socket.onmessage = (event) => {
       submitBtn.disabled = false;
       submitBtn.innerText = 'Submit Story';
       promptTitleDisplay.innerText = data.prompt.title;
-      promptGenreDisplay.innerText = data.prompt.genre;
-      promptKeywordsDisplay.innerText = data.prompt.keywords.join(', ');
+      promptGenreDisplay.innerText = data.prompt.genre || '';
+      promptKeywordsDisplay.innerText = (data.prompt.keywords || []).join(', ');
+      promptGenreRow.hidden = !data.prompt.genre;
+      promptKeywordsRow.hidden = !data.prompt.keywords?.length;
+      if (roundBadge) roundBadge.innerText = `Round ${data.roundNumber}`;
+      if (finishWritingBtn) finishWritingBtn.style.display = isHost ? '' : 'none';
       if (timerDisplay) timerDisplay.innerText = `${Math.floor(data.duration / 60)}:${String(data.duration % 60).padStart(2, '0')}`;
       showView('view-writing');
       break;
 
     case 'TIMER_TICK':
       if (timerDisplay) timerDisplay.innerText = `Time Remaining: ${data.timeRemaining}s`;
+      break;
+
+    case 'ROUND_TIME_UP':
+      if (timerDisplay) timerDisplay.innerText = 'Time is up';
+      submitStory(true);
       break;
 
     case 'PLAYER_SUBMITTED':
@@ -170,15 +206,22 @@ socket.onmessage = (event) => {
         nextRoundBtn.style.display = isHost ? '' : 'none';
         nextRoundBtn.innerText = data.roundNumber < data.totalRounds ? 'Next Round' : 'View Final Results';
       }
+      if (finishSummaryBtn) finishSummaryBtn.style.display = isHost ? '' : 'none';
       showView('view-round-summary');
       break;
 
     case 'GAME_OVER':
       renderFinalStandings(data.standings);
+      renderAwardReport(data.awards, data.playerTraits, data.reportError);
       showView('view-final-results');
       break;
 
+    case 'GAME_END_PENDING':
+      setFinishButtonsDisabled(true, 'Finishing Game...');
+      break;
+
     case 'ERROR':
+      setFinishButtonsDisabled(false, 'Finish Game Now');
       alert(`Error: ${data.message}`);
       break;
   }
@@ -236,6 +279,42 @@ function renderFinalStandings(standings) {
   const leaderboard = document.getElementById('final-leaderboard-container');
   if (!leaderboard) return;
   leaderboard.innerHTML = standings
-    .map((player, index) => `<p>${index + 1}. ${player.playerName}: ${player.totalScore}</p>`)
+    .map((player, index) => `<p>${index + 1}. ${escapeHtml(player.playerName)}: ${escapeHtml(player.totalScore)}</p>`)
     .join('');
+}
+
+function setFinishButtonsDisabled(disabled, label) {
+  [finishWritingBtn, finishSummaryBtn].forEach((button) => {
+    if (!button) return;
+    button.disabled = disabled;
+    button.innerText = label;
+  });
+}
+
+function renderAwardReport(awards = [], playerTraits = [], reportError = '') {
+  const awardsDisplay = document.getElementById('awards-container');
+  const traitsDisplay = document.getElementById('player-traits-container');
+  if (awardsDisplay) {
+    awardsDisplay.innerHTML = awards.length
+      ? awards.map((award) => {
+        const roundLabel = award.roundNumber ? ` (Round ${escapeHtml(award.roundNumber)})` : '';
+        return `<article><h3>${escapeHtml(award.title)}: ${escapeHtml(award.playerName)}${roundLabel}</h3><p>${escapeHtml(award.reason)}</p></article>`;
+      }).join('')
+      : `<p>${escapeHtml(reportError || 'Story awards could not be generated for this game.')}</p>`;
+  }
+  if (traitsDisplay) {
+    traitsDisplay.innerHTML = playerTraits.length
+      ? playerTraits.map((entry) => `<article><h4>${escapeHtml(entry.playerName)}</h4><p>${(entry.traits || []).map(escapeHtml).join(', ')}</p><p>${escapeHtml(entry.evidence)}</p></article>`).join('')
+      : `<p>${escapeHtml(reportError || 'Player traits are unavailable for this game.')}</p>`;
+  }
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[character]);
 }
