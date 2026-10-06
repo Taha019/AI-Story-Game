@@ -11,13 +11,15 @@ const joinBtn = document.getElementById('btn-join');
 const startBtn = document.getElementById('btn-start');
 const playerNameInput = document.getElementById('player-name');
 const joinCodeInput = document.getElementById('join-code');
-const submitBtn = document.getElementById('submit-btn');
+const submitBtn = document.getElementById('btn-submit-story');
 const timerInput = document.getElementById('timer-duration-input');
-const storyInput = document.getElementById('story-textarea');
-const timerDisplay = document.getElementById('timer-display');
+const storyInput = document.getElementById('story-input');
+const timerDisplay = document.getElementById('timer');
 const playerListDisplay = document.getElementById('player-list');
-const promptDisplay = document.getElementById('prompt-display');
-const resultsDisplay = document.getElementById('results-display');
+const promptTitleDisplay = document.getElementById('prompt-title');
+const promptGenreDisplay = document.getElementById('prompt-genre');
+const promptKeywordsDisplay = document.getElementById('prompt-keywords');
+const resultsDisplay = document.getElementById('round-results-container');
 
 if (createBtn) {
   createBtn.addEventListener('click', () => {
@@ -106,16 +108,15 @@ socket.onmessage = (event) => {
       break;
 
     case 'ROUND_STARTED':
-      // Reset inputs for all players simultaneously
       storyInput.disabled = false;
       storyInput.value = '';
       submitBtn.disabled = false;
       submitBtn.innerText = 'Submit Story';
-
-      promptDisplay.innerHTML = `
-        <h3>${data.prompt.title} (${data.prompt.genre})</h3>
-        <p><strong>Keywords:</strong> ${data.prompt.keywords.join(', ')}</p>
-      `;
+      promptTitleDisplay.innerText = data.prompt.title;
+      promptGenreDisplay.innerText = data.prompt.genre;
+      promptKeywordsDisplay.innerText = data.prompt.keywords.join(', ');
+      if (timerDisplay) timerDisplay.innerText = `${Math.floor(data.duration / 60)}:${String(data.duration % 60).padStart(2, '0')}`;
+      showView('view-writing');
       break;
 
     case 'TIMER_TICK':
@@ -129,11 +130,12 @@ socket.onmessage = (event) => {
     case 'ROUND_JUDGING':
       storyInput.disabled = true;
       submitBtn.disabled = true;
-      promptDisplay.innerHTML = `<h3>Judging in progress...</h3>`;
+      showView('view-judging');
       break;
 
     case 'ROUND_RESULTS':
       renderResults(data.evaluations);
+      showView('view-round-summary');
       break;
 
     case 'ERROR':
@@ -144,8 +146,12 @@ socket.onmessage = (event) => {
 
 function showWaitingRoom() {
   document.getElementById('display-room-code').innerText = roomCode;
-  document.getElementById('view-lobby').classList.remove('active');
-  document.getElementById('view-waiting').classList.add('active');
+  showView('view-waiting');
+}
+
+function showView(viewId) {
+  document.querySelectorAll('.view').forEach((view) => view.classList.remove('active'));
+  document.getElementById(viewId).classList.add('active');
 }
 
 function updateLobby(players, timerDuration) {
