@@ -56,7 +56,8 @@ wss.on('connection', (ws) => {
             totalRounds: data.totalRounds,
             timerDuration: data.timerDuration,
             genre: data.genre,
-            keywords
+            keywords,
+            metrics: data.metrics
           });
           currentRoomCode = room.code;
 
@@ -65,7 +66,8 @@ wss.on('connection', (ws) => {
             roomCode: room.code,
             host: room.host,
             players: room.getPlayerList(),
-            timerDuration: room.timerDuration
+            timerDuration: room.timerDuration,
+            metrics: room.customMetrics
           }));
           break;
         }
@@ -84,14 +86,16 @@ wss.on('connection', (ws) => {
             type: 'ROOM_JOINED',
             roomCode: room.code,
             players: room.getPlayerList(),
-            timerDuration: room.timerDuration
+            timerDuration: room.timerDuration,
+            metrics: room.customMetrics
           }));
 
           const playerJoined = JSON.stringify({
             type: 'PLAYER_JOINED',
             players: room.getPlayerList(),
             host: room.host,
-            timerDuration: room.timerDuration
+            timerDuration: room.timerDuration,
+            metrics: room.customMetrics
           });
           for (const [name, playerSocket] of room.players) {
             if (name !== playerName && playerSocket.readyState === 1) {

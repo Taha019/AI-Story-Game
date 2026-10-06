@@ -5,6 +5,7 @@ let pendingSocketMessage = null;
 let roomCode = null;
 let playerName = null;
 let isHost = false;
+let judgingMetrics = [];
 
 // DOM Elements
 const createBtn = document.getElementById('btn-create');
@@ -13,6 +14,9 @@ const startBtn = document.getElementById('btn-start');
 const playerNameInput = document.getElementById('player-name');
 const joinCodeInput = document.getElementById('join-code');
 const totalRoundsInput = document.getElementById('total-rounds');
+const metricsContainer = document.getElementById('metrics-container');
+const addMetricBtn = document.getElementById('btn-add-metric');
+const judgingMetricsList = document.getElementById('judging-metrics-list');
 const genreInput = document.getElementById('genre-input');
 const keywordsInput = document.getElementById('keywords-input');
 const submitBtn = document.getElementById('btn-submit-story');
@@ -21,6 +25,8 @@ const finishWritingBtn = document.getElementById('btn-finish-writing');
 const finishSummaryBtn = document.getElementById('btn-finish-summary');
 const connectionStatus = document.getElementById('connection-status');
 const timerInput = document.getElementById('timer-duration-input');
+const roomTimerInput = document.getElementById('room-timer-duration-input');
+const hostRoomSettings = document.getElementById('host-room-settings');
 const storyInput = document.getElementById('story-input');
 const timerDisplay = document.getElementById('timer');
 const playerListDisplay = document.getElementById('player-list');
@@ -36,6 +42,8 @@ if (createBtn) {
   createBtn.addEventListener('click', () => {
     playerName = playerNameInput.value.trim();
     if (!playerName) return alert('Please enter your display name.');
+    const metrics = collectMetrics();
+    if (!metrics) return;
 
     sendSocketMessage({
       type: 'CREATE_ROOM',
@@ -43,9 +51,46 @@ if (createBtn) {
       totalRounds: Number(totalRoundsInput.value),
       timerDuration: Number(timerInput.value),
       genre: genreInput.value.trim(),
-      keywords: keywordsInput.value.trim()
+      keywords: keywordsInput.value.trim(),
+      metrics
     });
   });
+}
+
+if (addMetricBtn) {
+  addMetricBtn.addEventListener('click', () => {
+    if (metricsContainer.querySelectorAll('.metric-row').length >= 4) return;
+
+    const row = document.createElement('div');
+    row.className = 'metric-row';
+    row.innerHTML = '<input type="text" class="metric-name" placeholder="Metric Name"><input type="text" class="metric-desc" placeholder="Description">';
+    metricsContainer.appendChild(row);
+    if (metricsContainer.querySelectorAll('.metric-row').length >= 4) {
+      addMetricBtn.disabled = true;
+      addMetricBtn.innerText = 'Maximum of 4 criteria';
+    }
+  });
+}
+
+function collectMetrics() {
+  const rows = [...metricsContainer.querySelectorAll('.metric-row')];
+  const metrics = rows.map((row) => ({
+    name: row.querySelector('.metric-name').value.trim(),
+    description: row.querySelector('.metric-desc').value.trim()
+  }));
+  if (!metrics.length || metrics.length > 4) {
+    alert('Add between 1 and 4 judging criteria.');
+    return null;
+  }
+  if (metrics.some((metric) => !metric.name || !metric.description)) {
+    alert('Enter both a name and description for every judging criterion.');
+    return null;
+  }
+  if (new Set(metrics.map((metric) => metric.name.toLowerCase())).size !== metrics.length) {
+    alert('Judging criterion names must be unique.');
+    return null;
+  }
+  return metrics;
 }
 
 if (joinBtn) {
@@ -84,6 +129,19 @@ if (timerInput) {
       type: 'UPDATE_ROOM_SETTINGS',
       timerDuration: parseInt(e.target.value, 10)
     }));
+  });
+}
+
+if (roomTimerInput) {
+  roomTimerInput.addEventListener('change', (event) => {
+    if (!isHost || !roomCode) return;
+    const timerDuration = Number(event.target.value);
+    if (!Number.isInteger(timerDuration) || timerDuration < 30 || timerDuration > 600) {
+      alert('Timer must be between 30 and 600 seconds.');
+      event.target.value = timerInput.value;
+      return;
+    }
+    sendSocketMessage({ type: 'UPDATE_ROOM_SETTINGS', timerDuration });
   });
 }
 
@@ -143,7 +201,9 @@ socket.onmessage = (event) => {
     case 'ROOM_CREATED':
       roomCode = data.roomCode;
       isHost = true;
+      renderCriteria(data.metrics);
       updateLobby(data.players, data.timerDuration);
+      if (hostRoomSettings) hostRoomSettings.style.display = '';
       showWaitingRoom();
       if (startBtn) startBtn.style.display = '';
       break;
@@ -151,20 +211,25 @@ socket.onmessage = (event) => {
     case 'ROOM_JOINED':
       roomCode = data.roomCode;
       isHost = false;
+      renderCriteria(data.metrics);
       updateLobby(data.players, data.timerDuration);
+      if (hostRoomSettings) hostRoomSettings.style.display = 'none';
       showWaitingRoom();
       break;
 
     case 'PLAYER_JOINED':
+      renderCriteria(data.metrics);
       updateLobby(data.players, data.timerDuration);
       break;
 
     case 'ROOM_SETTINGS_UPDATED':
       if (timerDisplay) timerDisplay.innerText = `Timer: ${data.timerDuration}s`;
       if (timerInput) timerInput.value = data.timerDuration;
+      if (roomTimerInput) roomTimerInput.value = data.timerDuration;
       break;
 
     case 'ROUND_STARTED':
+      renderCriteria(data.metrics);
       storyInput.disabled = false;
       storyInput.value = '';
       submitBtn.disabled = false;
@@ -258,6 +323,7 @@ function updateLobby(players, timerDuration) {
     playerListDisplay.innerHTML = players.map(p => `<li>${p}</li>`).join('');
   }
   if (timerInput) timerInput.value = timerDuration;
+  if (roomTimerInput) roomTimerInput.value = timerDuration;
 }
 
 function renderResults(evaluations) {
@@ -269,10 +335,21 @@ function renderResults(evaluations) {
       <p><strong>Summary:</strong> ${e.summary}</p>
       <p><strong>Critique:</strong> ${e.critique}</p>
       <ul>
-        ${Object.entries(e.scores).map(([k, v]) => `<li>${k}:${v}/10</li>`).join('')}
+        ${Object.entries(e.scores).map(([key, value]) => {
+          const name = judgingMetrics.find((metric) => metric.key === key)?.name || key;
+          return `<li>${escapeHtml(name)}: ${escapeHtml(value)}/10</li>`;
+        }).join('')}
       </ul>
     </div>
   `).join('');
+}
+
+function renderCriteria(metrics = []) {
+  judgingMetrics = Array.isArray(metrics) ? metrics : [];
+  if (!judgingMetricsList) return;
+  judgingMetricsList.innerHTML = judgingMetrics
+    .map((metric) => `<li><strong>${escapeHtml(metric.name)}</strong>: ${escapeHtml(metric.description)}</li>`)
+    .join('');
 }
 
 function renderFinalStandings(standings) {

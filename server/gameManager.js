@@ -20,19 +20,26 @@ export class Room {
     this.storyHistory = [];
     this.endGameRequested = false;
     
-    // Custom criteria evaluated on a 1-10 integer scale
-    this.customMetrics = [
-      { key: 'creativity', name: 'Creativity', description: 'Originality and imaginative narrative elements.' },
-      { key: 'coherence', name: 'Coherence', description: 'Logical story flow and grammar quality.' },
-      { key: 'adherence', name: 'Adherence', description: 'Fit with the story title and prompt.' }
+    const defaultMetrics = [
+      { key: 'Structured Chaos', name: 'Structured Chaos', description: 'Unpredictable, wild elements that follow the internal logic of the world.' },
+      { key: 'Conceptual Originality', name: 'Conceptual Originality', description: 'Fresh, unexpected premises that take daring creative risks.' },
+      { key: 'Atmospheric Immersion', name: 'Atmospheric Immersion', description: 'Strong sensory detail, tone, and tactile setting work.' },
+      { key: 'Narrative Velocity and Flow', name: 'Narrative Velocity & Flow', description: 'Crisp pacing, readability, and momentum without narrative roadblocks.' },
+      { key: 'Emotional Resonance or Comedic Landing', name: 'Emotional Resonance or Comedic Landing', description: 'A genuine intended impact, whether a hard-hitting punchline or quiet resonance.' },
+      { key: 'Character Anchoring', name: 'Character Anchoring', description: 'Distinct voices, clear motivations, and memorable presence.' },
+      { key: 'The Twist / Satisfying Payoff', name: 'The Twist / Satisfying Payoff', description: 'A climax or subversion that feels earned by the setup.' },
+      { key: 'Prompt Fidelity', name: 'Prompt Fidelity', description: 'Deep integration of the theme into the DNA of the story.' }
     ];
-    if (this.keywords.length) {
-      this.customMetrics.push({
+    if (this.keywords.length && options.metrics === undefined) {
+      defaultMetrics.push({
         key: 'keywordUsage',
         name: 'Keyword Usage',
         description: 'Seamless incorporation of the required words.'
       });
     }
+    this.customMetrics = options.metrics === undefined
+      ? defaultMetrics
+      : normalizeMetrics(options.metrics);
     
     this.timerInterval = null;
     this.submissionTimeout = null;
@@ -71,6 +78,30 @@ export class Room {
       }
     }
   }
+}
+
+function normalizeMetrics(metrics) {
+  if (!Array.isArray(metrics) || metrics.length < 1 || metrics.length > 4) {
+    throw new Error('Choose between 1 and 4 judging criteria.');
+  }
+
+  const names = new Set();
+  const keys = new Set();
+  return metrics.map((metric, index) => {
+    const name = typeof metric.name === 'string' ? metric.name.trim().slice(0, 50) : '';
+    const description = typeof metric.description === 'string' ? metric.description.trim().slice(0, 250) : '';
+    const normalizedName = name.toLowerCase();
+    if (!name || !description) throw new Error('Each judging criterion needs a name and description.');
+    if (names.has(normalizedName)) throw new Error('Judging criterion names must be unique.');
+    names.add(normalizedName);
+
+    const baseKey = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || `metric_${index + 1}`;
+    let key = baseKey;
+    let suffix = 2;
+    while (keys.has(key)) key = `${baseKey}_${suffix++}`;
+    keys.add(key);
+    return { key, name, description };
+  });
 }
 
 export class GameManager {
@@ -142,6 +173,7 @@ export class GameManager {
       duration: room.timerDuration,
       roundNumber: room.roundNumber,
       totalRounds: room.totalRounds,
+      metrics: room.customMetrics,
       status: room.status
     });
 

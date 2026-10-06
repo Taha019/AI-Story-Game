@@ -55,7 +55,7 @@
           </div>
           <div class="metric-row">
             <input type="text" class="metric-name" value="Adherence" placeholder="Metric Name">
-            <input type="text" class="metric-desc" value="Fit with title and required keywords" placeholder="Description">
+            <input type="text" class="metric-desc" value="Fit with the story title and prompt" placeholder="Description">
           </div>
         </div>
         <button type="button" id="btn-add-metric" style="background: #334155; font-size: 0.8rem;">+ Add Custom Metric</button>
@@ -77,7 +77,15 @@
     <div id="view-waiting" class="view">
       <h2>Lobby ID: <span id="display-room-code" style="color: var(--gold)"></span></h2>
       <p style="color: var(--text-muted)">Waiting for players (2 to 5 players required):</p>
+      <div id="host-room-settings" style="display: none;">
+        <label for="room-timer-duration-input">Writing Timer (seconds)</label>
+        <input type="number" id="room-timer-duration-input" value="300" min="30" max="600" step="15">
+      </div>
       <div id="player-list" class="tag-list"></div>
+      <div>
+        <strong>Judging Criteria</strong>
+        <ul id="judging-metrics-list"></ul>
+      </div>
       <button id="btn-start" style="display: none;">Start Game</button>
     </div>
 
