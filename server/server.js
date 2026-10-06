@@ -1,74 +1,107 @@
-import express from 'express';
-import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
+import http from 'http';
+import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
 import { GameManager } from './gameManager.js';
-
-dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const server = createServer(app);
+const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
+
 const gameManager = new GameManager();
 
-app.use(express.static(path.join(__dirname, '../public')));
+// Resolve client path robustly for production deployments
+const clientPath = path.resolve(__dirname, '../public');
 
-let nextSocketId = 1;
+if (fs.existsSync(clientPath)) {
+  console.log(`Serving static assets from: ${clientPath}`);
+  app.use(express.static(clientPath));
+
+  app.get('*', (req, res) => {
+    const indexPath = path.join(clientPath, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      res.status(404).send('index.html not found inside client directory.');
+    }
+  });
+} else {
+  console.error(`Directory not found at ${clientPath}`);
+  app.get('*', (req, res) => {
+    res.status(404).send('Client static directory not found on server.');
+  });
+}
 
 wss.on('connection', (ws) => {
-  ws.id = `user_${nextSocketId++}`;
+  let currentRoomCode = null;
+  let currentPlayerName = null;
 
   ws.on('message', async (message) => {
     try {
-      const payload = JSON.parse(message);
-      switch (payload.type) {
+      const data = JSON.parse(message);
+
+      switch (data.type) {
         case 'CREATE_ROOM': {
-          const room = gameManager.createRoom(
-            ws,
-            payload.playerName,
-            payload.apiKey,
-            payload.totalRounds,
-            payload.metrics
-          );
-          ws.send(JSON.stringify({ type: 'ROOM_CREATED', roomCode: room.code, socketId: ws.id }));
-          gameManager.broadcastRoomUpdate(room);
+          currentPlayerName = data.playerName;
+          const room = gameManager.createRoom(currentPlayerName, ws);
+          currentRoomCode = room.code;
+
+          ws.send(JSON.stringify({
+            type: 'ROOM_CREATED',
+            roomCode: room.code,
+            host: room.host,
+            players: room.getPlayerList(),
+            timerDuration: room.timerDuration
+          }));
           break;
         }
+
         case 'JOIN_ROOM': {
-          const result = gameManager.joinRoom(payload.roomCode, ws, payload.playerName);
-          if (result.error) {
-            ws.send(JSON.stringify({ type: 'ERROR', message: result.error }));
-          } else {
-            ws.send(JSON.stringify({ type: 'ROOM_JOINED', roomCode: result.room.code, socketId: ws.id }));
-            gameManager.broadcastRoomUpdate(result.room);
-          }
+          currentPlayerName = data.playerName;
+          currentRoomCode = data.roomCode;
+          const room = gameManager.joinRoom(currentRoomCode, currentPlayerName, ws);
+
+          room.broadcast({
+            type: 'PLAYER_JOINED',
+            players: room.getPlayerList(),
+            host: room.host,
+            timerDuration: room.timerDuration
+          });
           break;
         }
+
+        case 'UPDATE_ROOM_SETTINGS': {
+          if (!currentRoomCode || !currentPlayerName) return;
+          gameManager.setTimerDuration(currentRoomCode, currentPlayerName, data.timerDuration);
+          break;
+        }
+
         case 'START_GAME': {
-          await gameManager.startRound(payload.roomCode);
+          if (!currentRoomCode) return;
+          await gameManager.startRound(currentRoomCode);
           break;
         }
+
         case 'SUBMIT_STORY': {
-          gameManager.submitStory(payload.roomCode, ws.id, payload.story);
-          break;
-        }
-        case 'NEXT_ROUND': {
-          gameManager.advanceGame(payload.roomCode);
+          if (!currentRoomCode || !currentPlayerName) return;
+          gameManager.submitStory(currentRoomCode, currentPlayerName, data.story);
           break;
         }
       }
     } catch (err) {
-      console.error('Socket message error:', err);
-      ws.send(JSON.stringify({ type: 'ERROR', message: err.message }));
+      ws.send(JSON.stringify({
+        type: 'ERROR',
+        message: err.message
+      }));
     }
   });
 
-ws.on('close', () => {
+  ws.on('close', () => {
     if (currentRoomCode && currentPlayerName) {
       const room = gameManager.rooms.get(currentRoomCode);
       if (room) {
@@ -91,5 +124,5 @@ ws.on('close', () => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });

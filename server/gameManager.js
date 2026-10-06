@@ -5,15 +5,18 @@ export class Room {
     this.code = code;
     this.host = hostPlayerName;
     this.players = new Map(); // playerName -> socket
-    this.timerDuration = 120; // Default round duration in seconds
+    this.timerDuration = 300; // Default duration in seconds
     this.status = 'WAITING'; // WAITING, WRITING, JUDGING, FINISHED
     this.currentPrompt = null;
-    this.submissions = new Map(); // playerName -> story string
+    this.submissions = new Map(); // playerName -> story text string
+    
+    // Custom criteria evaluated on a 1-10 integer scale
     this.customMetrics = [
       { key: 'creativity', name: 'Creativity', description: 'Originality and imaginative narrative elements.' },
       { key: 'coherence', name: 'Coherence', description: 'Logical story flow and grammar quality.' },
       { key: 'keywordUsage', name: 'Keyword Usage', description: 'Seamless incorporation of required words.' }
     ];
+    
     this.timerInterval = null;
     this.timeRemaining = 0;
   }
@@ -83,11 +86,11 @@ export class GameManager {
   setTimerDuration(roomCode, playerName, seconds) {
     const room = this.rooms.get(roomCode);
     if (!room) throw new Error('Room not found.');
-    if (room.host !== playerName) throw new Error('Only the host can update room settings.');
-    if (room.status !== 'WAITING') throw new Error('Cannot change settings during a game.');
+    if (room.host !== playerName) throw new Error('Only the room host can update settings.');
+    if (room.status !== 'WAITING') throw new Error('Cannot change settings while a game is in progress.');
 
     const updated = room.setTimerDuration(seconds);
-    if (!updated) throw new Error('Invalid timer duration. Must be between 30 and 600 seconds.');
+    if (!updated) throw new Error('Invalid duration. Timer must be between 30 and 600 seconds.');
 
     room.broadcast({
       type: 'ROOM_SETTINGS_UPDATED',
@@ -101,8 +104,8 @@ export class GameManager {
 
     room.status = 'WRITING';
     room.submissions.clear();
-    
-    // Fetch prompt from AI service
+
+    // Request prompt/topic generation from AI service
     room.currentPrompt = await this.geminiService.generatePrompt();
     room.timeRemaining = room.timerDuration;
 
@@ -113,7 +116,7 @@ export class GameManager {
       status: room.status
     });
 
-    // Start live broadcast timer countdown
+    // Start countdown broadcast interval
     if (room.timerInterval) clearInterval(room.timerInterval);
     room.timerInterval = setInterval(() => {
       room.timeRemaining -= 1;
@@ -144,7 +147,7 @@ export class GameManager {
       totalPlayers: room.players.size
     });
 
-    // Automatically trigger judging if all active players submitted before timer ends
+    // Automatically trigger evaluations if all players finish before timer expiration
     if (room.submissions.size >= room.players.size) {
       if (room.timerInterval) clearInterval(room.timerInterval);
       this.evaluateRound(roomCode);
