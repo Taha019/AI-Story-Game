@@ -7,7 +7,7 @@ export class GeminiService {
     }
 
     this.apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
-    this.model = 'llama-3.3-70b-versatile';
+    this.model = 'openai/gpt-oss-120b';
   }
 
   async generatePrompt() {
