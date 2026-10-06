@@ -14,7 +14,15 @@ const wss = new WebSocketServer({ server });
 
 const gameManager = new GameManager();
 
-app.use(express.static(path.join(__dirname, '../client')));
+const clientPath = path.join(__dirname, '../client');
+
+// Serve static client assets (HTML, CSS, JS)
+app.use(express.static(clientPath));
+
+// Fallback GET handler to ensure index.html is served for root or sub-routes
+app.get('*', (req, res) => {
+  res.sendFile(path.join(clientPath, 'index.html'));
+});
 
 wss.on('connection', (ws) => {
   let currentRoomCode = null;
