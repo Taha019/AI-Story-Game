@@ -7,7 +7,9 @@ export class Room {
     this.players = new Map(); // playerName -> socket
     this.timerDuration = 300; // Default duration in seconds
     this.setTimerDuration(options.timerDuration);
-    this.totalRounds = [1, 2, 3, 5].includes(Number(options.totalRounds)) ? Number(options.totalRounds) : 3;
+    this.totalRounds = Number.isInteger(Number(options.totalRounds)) && Number(options.totalRounds) >= 1 && Number(options.totalRounds) <= 10
+      ? Number(options.totalRounds)
+      : 3;
     this.genre = typeof options.genre === 'string' ? options.genre.trim().slice(0, 80) || null : null;
     this.keywords = Array.isArray(options.keywords)
       ? options.keywords.filter((keyword) => typeof keyword === 'string' && keyword.trim()).slice(0, 8)
@@ -58,8 +60,8 @@ export class Room {
   }
 
   setTimerDuration(seconds) {
-    const duration = parseInt(seconds, 10);
-    if (!isNaN(duration) && duration >= 30 && duration <= 600) {
+    const duration = Number(seconds);
+    if (Number.isInteger(duration) && duration >= 30 && duration <= 1800) {
       this.timerDuration = duration;
       return true;
     }

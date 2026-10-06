@@ -69,3 +69,4 @@ button:hover { background: var(--accent-hover); }
 .timer { font-size: 1.5rem; font-weight: bold; color: var(--gold); text-align: center; margin: 1rem 0; }
 .result-card { background: #0f172a; border: 1px solid var(--border); padding: 1rem; border-radius: 8px; margin-bottom: 1rem; }
 .award-card { background: #312e81; border: 1px solid #6366f1; padding: 1rem; border-radius: 8px; margin-bottom: 0.8rem; }
+.winner-banner { background: #312e81; border: 1px solid var(--gold); border-radius: 8px; color: var(--gold); font-size: 1.2rem; font-weight: bold; padding: 1rem; text-align: center; }

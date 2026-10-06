@@ -1,6 +1,7 @@
 const socketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 const socket = new WebSocket(`${socketProtocol}//${window.location.host}`);
 let pendingSocketMessage = null;
+const MAX_TIMER_DURATION_SECONDS = 1800;
 
 let roomCode = null;
 let playerName = null;
@@ -42,6 +43,10 @@ if (createBtn) {
   createBtn.addEventListener('click', () => {
     playerName = playerNameInput.value.trim();
     if (!playerName) return alert('Please enter your display name.');
+    const timerDuration = Number(timerInput.value);
+    if (!Number.isInteger(timerDuration) || timerDuration < 30 || timerDuration > MAX_TIMER_DURATION_SECONDS) {
+      return alert(`Timer must be between 30 and ${MAX_TIMER_DURATION_SECONDS} seconds.`);
+    }
     const metrics = collectMetrics();
     if (!metrics) return;
 
@@ -49,10 +54,10 @@ if (createBtn) {
       type: 'CREATE_ROOM',
       playerName,
       totalRounds: Number(totalRoundsInput.value),
-      timerDuration: Number(timerInput.value),
+      timerDuration,
       genre: genreInput.value.trim(),
       keywords: keywordsInput.value.trim(),
-      metrics
+      metrics: metrics.length ? metrics : undefined
     });
   });
 }
@@ -78,19 +83,20 @@ function collectMetrics() {
     name: row.querySelector('.metric-name').value.trim(),
     description: row.querySelector('.metric-desc').value.trim()
   }));
-  if (!metrics.length || metrics.length > 4) {
-    alert('Add between 1 and 4 judging criteria.');
+  const customMetrics = metrics.filter((metric) => metric.name || metric.description);
+  if (customMetrics.length > 4) {
+    alert('Add no more than 4 custom judging criteria.');
     return null;
   }
-  if (metrics.some((metric) => !metric.name || !metric.description)) {
+  if (customMetrics.some((metric) => !metric.name || !metric.description)) {
     alert('Enter both a name and description for every judging criterion.');
     return null;
   }
-  if (new Set(metrics.map((metric) => metric.name.toLowerCase())).size !== metrics.length) {
+  if (new Set(customMetrics.map((metric) => metric.name.toLowerCase())).size !== customMetrics.length) {
     alert('Judging criterion names must be unique.');
     return null;
   }
-  return metrics;
+  return customMetrics;
 }
 
 if (joinBtn) {
@@ -136,8 +142,8 @@ if (roomTimerInput) {
   roomTimerInput.addEventListener('change', (event) => {
     if (!isHost || !roomCode) return;
     const timerDuration = Number(event.target.value);
-    if (!Number.isInteger(timerDuration) || timerDuration < 30 || timerDuration > 600) {
-      alert('Timer must be between 30 and 600 seconds.');
+    if (!Number.isInteger(timerDuration) || timerDuration < 30 || timerDuration > MAX_TIMER_DURATION_SECONDS) {
+      alert(`Timer must be between 30 and ${MAX_TIMER_DURATION_SECONDS} seconds.`);
       event.target.value = timerInput.value;
       return;
     }
@@ -354,8 +360,21 @@ function renderCriteria(metrics = []) {
 
 function renderFinalStandings(standings) {
   const leaderboard = document.getElementById('final-leaderboard-container');
+  const winnerAnnouncement = document.getElementById('winner-announcement');
   if (!leaderboard) return;
-  leaderboard.innerHTML = standings
+  const rankedStandings = [...(standings || [])].sort((first, second) => Number(second.totalScore) - Number(first.totalScore));
+  if (winnerAnnouncement) {
+    if (rankedStandings.length) {
+      const topScore = Number(rankedStandings[0].totalScore) || 0;
+      const winners = rankedStandings
+        .filter((player) => Number(player.totalScore) === topScore)
+        .map((player) => escapeHtml(player.playerName));
+      winnerAnnouncement.innerText = `${winners.length > 1 ? 'Winners' : 'Winner'}: ${winners.join(', ')} (${topScore} points${winners.length > 1 ? ' each' : ''})`;
+    } else {
+      winnerAnnouncement.innerText = 'No winner: no scores were recorded.';
+    }
+  }
+  leaderboard.innerHTML = rankedStandings
     .map((player, index) => `<p>${index + 1}. ${escapeHtml(player.playerName)}: ${escapeHtml(player.totalScore)}</p>`)
     .join('');
 }

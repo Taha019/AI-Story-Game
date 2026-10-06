@@ -23,13 +23,19 @@
           <option value="1">1 Round</option>
           <option value="2">2 Rounds</option>
           <option value="3" selected>3 Rounds</option>
+          <option value="4">4 Rounds</option>
           <option value="5">5 Rounds</option>
+          <option value="6">6 Rounds</option>
+          <option value="7">7 Rounds</option>
+          <option value="8">8 Rounds</option>
+          <option value="9">9 Rounds</option>
+          <option value="10">10 Rounds</option>
         </select>
       </div>
 
       <div class="form-group">
         <label for="timer-duration-input">Writing Timer (seconds)</label>
-        <input type="number" id="timer-duration-input" value="300" min="30" max="600" step="15">
+        <input type="number" id="timer-duration-input" value="300" min="30" max="1800" step="15">
       </div>
 
       <div class="form-group">
@@ -43,20 +49,8 @@
       </div>
 
       <div class="form-group">
-        <label>Custom Judging Metrics (Max 4)</label>
+        <label>Custom Judging Metrics (Optional, Max 4)</label>
         <div id="metrics-container">
-          <div class="metric-row">
-            <input type="text" class="metric-name" value="Creativity" placeholder="Metric Name">
-            <input type="text" class="metric-desc" value="Originality and narrative style" placeholder="Description">
-          </div>
-          <div class="metric-row">
-            <input type="text" class="metric-name" value="Coherence" placeholder="Metric Name">
-            <input type="text" class="metric-desc" value="Structure and readability" placeholder="Description">
-          </div>
-          <div class="metric-row">
-            <input type="text" class="metric-name" value="Adherence" placeholder="Metric Name">
-            <input type="text" class="metric-desc" value="Fit with the story title and prompt" placeholder="Description">
-          </div>
         </div>
         <button type="button" id="btn-add-metric" style="background: #334155; font-size: 0.8rem;">+ Add Custom Metric</button>
       </div>
@@ -79,7 +73,7 @@
       <p style="color: var(--text-muted)">Waiting for players (2 to 5 players required):</p>
       <div id="host-room-settings" style="display: none;">
         <label for="room-timer-duration-input">Writing Timer (seconds)</label>
-        <input type="number" id="room-timer-duration-input" value="300" min="30" max="600" step="15">
+        <input type="number" id="room-timer-duration-input" value="300" min="30" max="1800" step="15">
       </div>
       <div id="player-list" class="tag-list"></div>
       <div>
@@ -132,11 +126,13 @@
     <!-- View 6: Final Game Standings & Awards -->
     <div id="view-final-results" class="view">
       <h1 style="text-align: center;">👑 Final Standings</h1>
+      <div id="winner-announcement" class="winner-banner" aria-live="polite"></div>
+      <h3>Points</h3>
+      <div id="final-leaderboard-container"></div>
+      <h3>Game Awards</h3>
       <div id="awards-container"></div>
       <h3>Player Traits From Their Stories</h3>
       <div id="player-traits-container"></div>
-      <h3>Leaderboard Tally</h3>
-      <div id="final-leaderboard-container"></div>
       <button onclick="location.reload()">Play Again</button>
     </div>
   </div>

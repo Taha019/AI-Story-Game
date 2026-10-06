@@ -5,8 +5,8 @@ A real-time, multiplayer AI storytelling game. A host creates a room, invites pl
 ## Features
 
 - Create and join multiplayer rooms with a four-digit code (up to five players).
-- Choose one, two, three, or five rounds.
-- Set the writing timer from 30 to 600 seconds, either when creating the room or in the waiting room.
+- Choose from one to ten rounds.
+- Set the writing timer from 30 to 1,800 seconds, either when creating the room or in the waiting room.
 - Optionally choose a genre and comma-separated keywords.
 - Use up to four custom judging criteria, each with a name and description.
 - Automatically submit the current draft when time expires.
