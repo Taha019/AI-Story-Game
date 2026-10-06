@@ -1,13 +1,15 @@
-const socket = new WebSocket(`wss://${window.location.host}`);
+const socketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const socket = new WebSocket(`${socketProtocol}//${window.location.host}`);
 
 let roomCode = null;
 let playerName = null;
 let isHost = false;
 
 // DOM Elements
-const createBtn = document.getElementById('create-btn');
-const joinBtn = document.getElementById('join-btn');
-const startBtn = document.getElementById('start-btn');
+const createBtn = document.getElementById('btn-create');
+const joinBtn = document.getElementById('btn-join');
+const startBtn = document.getElementById('btn-start');
+const playerNameInput = document.getElementById('player-name');
 const submitBtn = document.getElementById('submit-btn');
 const timerInput = document.getElementById('timer-duration-input');
 const storyInput = document.getElementById('story-textarea');
@@ -15,6 +17,16 @@ const timerDisplay = document.getElementById('timer-display');
 const playerListDisplay = document.getElementById('player-list');
 const promptDisplay = document.getElementById('prompt-display');
 const resultsDisplay = document.getElementById('results-display');
+
+if (createBtn) {
+  createBtn.addEventListener('click', () => {
+    playerName = playerNameInput.value.trim();
+    if (!playerName) return alert('Please enter your display name.');
+    if (socket.readyState !== WebSocket.OPEN) return alert('Connecting to the server. Please try again.');
+
+    socket.send(JSON.stringify({ type: 'CREATE_ROOM', playerName }));
+  });
+}
 
 // Update Room Timer Settings (Host Only)
 if (timerInput) {
@@ -60,6 +72,10 @@ socket.onmessage = (event) => {
       roomCode = data.roomCode;
       isHost = true;
       updateLobby(data.players, data.timerDuration);
+      document.getElementById('display-room-code').innerText = roomCode;
+      document.getElementById('view-lobby').classList.remove('active');
+      document.getElementById('view-waiting').classList.add('active');
+      if (startBtn) startBtn.style.display = '';
       break;
 
     case 'PLAYER_JOINED':

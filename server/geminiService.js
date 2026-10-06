@@ -2,11 +2,6 @@ export class GeminiService {
   constructor(apiKey = process.env.GROQ_API_KEY) {
     this.apiKey = apiKey || process.env.GROQ_API_KEY;
 
-    if (!this.apiKey) {
-      console.error('CRITICAL: GROQ_API_KEY is missing in process.env!');
-      throw new Error('GROQ_API_KEY environment variable is required.');
-    }
-
     this.apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
     this.model = 'llama-3.3-70b-versatile';
   }
@@ -66,6 +61,10 @@ Respond strictly in valid JSON format matching this exact structure:
   }
 
   async callAI(prompt, jsonMode = false, systemInstruction = '') {
+    if (!this.apiKey) {
+      throw new Error('GROQ_API_KEY environment variable is required to use AI features.');
+    }
+
     const messages = [];
     if (systemInstruction) {
       messages.push({ role: 'system', content: systemInstruction });
