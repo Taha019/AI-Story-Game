@@ -14,7 +14,7 @@ const wss = new WebSocketServer({ server });
 
 const gameManager = new GameManager();
 
-const clientPath = path.join(__dirname, '../client');
+const clientPath = path.join(__dirname, '../public');
 
 // Serve static client assets (HTML, CSS, JS)
 app.use(express.static(clientPath));
