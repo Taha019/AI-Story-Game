@@ -63,16 +63,33 @@ wss.on('connection', (ws) => {
         }
 
         case 'JOIN_ROOM': {
-          currentPlayerName = data.playerName;
-          currentRoomCode = data.roomCode;
-          const room = gameManager.joinRoom(currentRoomCode, currentPlayerName, ws);
+          const playerName = data.playerName?.trim();
+          const roomCode = data.roomCode?.trim();
+          if (!playerName) throw new Error('Please enter your display name.');
+          if (!roomCode) throw new Error('Please enter a room code.');
 
-          room.broadcast({
+          const room = gameManager.joinRoom(roomCode, playerName, ws);
+          currentPlayerName = playerName;
+          currentRoomCode = roomCode;
+
+          ws.send(JSON.stringify({
+            type: 'ROOM_JOINED',
+            roomCode: room.code,
+            players: room.getPlayerList(),
+            timerDuration: room.timerDuration
+          }));
+
+          const playerJoined = JSON.stringify({
             type: 'PLAYER_JOINED',
             players: room.getPlayerList(),
             host: room.host,
             timerDuration: room.timerDuration
           });
+          for (const [name, playerSocket] of room.players) {
+            if (name !== playerName && playerSocket.readyState === 1) {
+              playerSocket.send(playerJoined);
+            }
+          }
           break;
         }
 

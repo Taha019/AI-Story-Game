@@ -10,6 +10,7 @@ const createBtn = document.getElementById('btn-create');
 const joinBtn = document.getElementById('btn-join');
 const startBtn = document.getElementById('btn-start');
 const playerNameInput = document.getElementById('player-name');
+const joinCodeInput = document.getElementById('join-code');
 const submitBtn = document.getElementById('submit-btn');
 const timerInput = document.getElementById('timer-duration-input');
 const storyInput = document.getElementById('story-textarea');
@@ -25,6 +26,18 @@ if (createBtn) {
     if (socket.readyState !== WebSocket.OPEN) return alert('Connecting to the server. Please try again.');
 
     socket.send(JSON.stringify({ type: 'CREATE_ROOM', playerName }));
+  });
+}
+
+if (joinBtn) {
+  joinBtn.addEventListener('click', () => {
+    playerName = playerNameInput.value.trim();
+    const joinCode = joinCodeInput.value.trim();
+    if (!playerName) return alert('Please enter your display name.');
+    if (!/^\d{4}$/.test(joinCode)) return alert('Please enter the 4-digit room code.');
+    if (socket.readyState !== WebSocket.OPEN) return alert('Connecting to the server. Please try again.');
+
+    socket.send(JSON.stringify({ type: 'JOIN_ROOM', playerName, roomCode: joinCode }));
   });
 }
 
@@ -72,10 +85,15 @@ socket.onmessage = (event) => {
       roomCode = data.roomCode;
       isHost = true;
       updateLobby(data.players, data.timerDuration);
-      document.getElementById('display-room-code').innerText = roomCode;
-      document.getElementById('view-lobby').classList.remove('active');
-      document.getElementById('view-waiting').classList.add('active');
+      showWaitingRoom();
       if (startBtn) startBtn.style.display = '';
+      break;
+
+    case 'ROOM_JOINED':
+      roomCode = data.roomCode;
+      isHost = false;
+      updateLobby(data.players, data.timerDuration);
+      showWaitingRoom();
       break;
 
     case 'PLAYER_JOINED':
@@ -123,6 +141,12 @@ socket.onmessage = (event) => {
       break;
   }
 };
+
+function showWaitingRoom() {
+  document.getElementById('display-room-code').innerText = roomCode;
+  document.getElementById('view-lobby').classList.remove('active');
+  document.getElementById('view-waiting').classList.add('active');
+}
 
 function updateLobby(players, timerDuration) {
   if (playerListDisplay) {
