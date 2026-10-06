@@ -4,8 +4,8 @@ export class GeminiService {
       throw new Error('Gemini API key is required to run the game.');
     }
     this.apiKey = apiKey;
-    // Updated model to gemini-2.5-flash
-    this.apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+    // Updated endpoint model name to gemini-3.8-flash
+    this.apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent';
   }
 
   async generatePrompt() {
