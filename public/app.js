@@ -1,5 +1,6 @@
 const socketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 const socket = new WebSocket(`${socketProtocol}//${window.location.host}`);
+let pendingSocketMessage = null;
 
 let roomCode = null;
 let playerName = null;
@@ -11,7 +12,10 @@ const joinBtn = document.getElementById('btn-join');
 const startBtn = document.getElementById('btn-start');
 const playerNameInput = document.getElementById('player-name');
 const joinCodeInput = document.getElementById('join-code');
+const totalRoundsInput = document.getElementById('total-rounds');
 const submitBtn = document.getElementById('btn-submit-story');
+const nextRoundBtn = document.getElementById('btn-next-round');
+const connectionStatus = document.getElementById('connection-status');
 const timerInput = document.getElementById('timer-duration-input');
 const storyInput = document.getElementById('story-input');
 const timerDisplay = document.getElementById('timer');
@@ -25,9 +29,12 @@ if (createBtn) {
   createBtn.addEventListener('click', () => {
     playerName = playerNameInput.value.trim();
     if (!playerName) return alert('Please enter your display name.');
-    if (socket.readyState !== WebSocket.OPEN) return alert('Connecting to the server. Please try again.');
 
-    socket.send(JSON.stringify({ type: 'CREATE_ROOM', playerName }));
+    sendSocketMessage({
+      type: 'CREATE_ROOM',
+      playerName,
+      totalRounds: Number(totalRoundsInput.value)
+    });
   });
 }
 
@@ -37,11 +44,27 @@ if (joinBtn) {
     const joinCode = joinCodeInput.value.trim();
     if (!playerName) return alert('Please enter your display name.');
     if (!/^\d{4}$/.test(joinCode)) return alert('Please enter the 4-digit room code.');
-    if (socket.readyState !== WebSocket.OPEN) return alert('Connecting to the server. Please try again.');
 
-    socket.send(JSON.stringify({ type: 'JOIN_ROOM', playerName, roomCode: joinCode }));
+    sendSocketMessage({ type: 'JOIN_ROOM', playerName, roomCode: joinCode });
   });
 }
+
+socket.addEventListener('open', () => {
+  setConnectionStatus('Connected to game server.');
+  if (pendingSocketMessage) {
+    socket.send(pendingSocketMessage);
+    pendingSocketMessage = null;
+  }
+});
+
+socket.addEventListener('error', () => {
+  setConnectionStatus('Could not connect to the game server. Refresh and try again.');
+});
+
+socket.addEventListener('close', () => {
+  pendingSocketMessage = null;
+  setConnectionStatus('Disconnected from the game server. Refresh to reconnect.');
+});
 
 // Update Room Timer Settings (Host Only)
 if (timerInput) {
@@ -57,7 +80,14 @@ if (timerInput) {
 // Start Simultaneous Writing Round
 if (startBtn) {
   startBtn.addEventListener('click', () => {
-    socket.send(JSON.stringify({ type: 'START_GAME' }));
+    sendSocketMessage({ type: 'START_GAME' });
+  });
+}
+
+if (nextRoundBtn) {
+  nextRoundBtn.addEventListener('click', () => {
+    if (!isHost) return;
+    sendSocketMessage({ type: 'NEXT_ROUND' });
   });
 }
 
@@ -67,10 +97,10 @@ if (submitBtn) {
     const storyText = storyInput.value.trim();
     if (!storyText) return alert('Please write a story before submitting!');
 
-    socket.send(JSON.stringify({
+    sendSocketMessage({
       type: 'SUBMIT_STORY',
       story: storyText
-    }));
+    });
 
     submitBtn.disabled = true;
     storyInput.disabled = true;
@@ -135,7 +165,17 @@ socket.onmessage = (event) => {
 
     case 'ROUND_RESULTS':
       renderResults(data.evaluations);
+      document.getElementById('summary-round-title').innerText = `Round ${data.roundNumber} of ${data.totalRounds}`;
+      if (nextRoundBtn) {
+        nextRoundBtn.style.display = isHost ? '' : 'none';
+        nextRoundBtn.innerText = data.roundNumber < data.totalRounds ? 'Next Round' : 'View Final Results';
+      }
       showView('view-round-summary');
+      break;
+
+    case 'GAME_OVER':
+      renderFinalStandings(data.standings);
+      showView('view-final-results');
       break;
 
     case 'ERROR':
@@ -152,6 +192,22 @@ function showWaitingRoom() {
 function showView(viewId) {
   document.querySelectorAll('.view').forEach((view) => view.classList.remove('active'));
   document.getElementById(viewId).classList.add('active');
+}
+
+function sendSocketMessage(message) {
+  const serializedMessage = JSON.stringify(message);
+  if (socket.readyState === WebSocket.OPEN) {
+    socket.send(serializedMessage);
+  } else if (socket.readyState === WebSocket.CONNECTING) {
+    pendingSocketMessage = serializedMessage;
+    setConnectionStatus('Connecting to the game server. Your request will be sent when connected.');
+  } else {
+    setConnectionStatus('Not connected to the game server. Refresh to reconnect.');
+  }
+}
+
+function setConnectionStatus(message) {
+  if (connectionStatus) connectionStatus.innerText = message;
 }
 
 function updateLobby(players, timerDuration) {
@@ -174,4 +230,12 @@ function renderResults(evaluations) {
       </ul>
     </div>
   `).join('');
+}
+
+function renderFinalStandings(standings) {
+  const leaderboard = document.getElementById('final-leaderboard-container');
+  if (!leaderboard) return;
+  leaderboard.innerHTML = standings
+    .map((player, index) => `<p>${index + 1}. ${player.playerName}: ${player.totalScore}</p>`)
+    .join('');
 }

@@ -49,7 +49,7 @@ wss.on('connection', (ws) => {
       switch (data.type) {
         case 'CREATE_ROOM': {
           currentPlayerName = data.playerName;
-          const room = gameManager.createRoom(currentPlayerName, ws);
+          const room = gameManager.createRoom(currentPlayerName, ws, data.totalRounds);
           currentRoomCode = room.code;
 
           ws.send(JSON.stringify({
@@ -101,7 +101,13 @@ wss.on('connection', (ws) => {
 
         case 'START_GAME': {
           if (!currentRoomCode) return;
-          await gameManager.startRound(currentRoomCode);
+          await gameManager.startRound(currentRoomCode, currentPlayerName);
+          break;
+        }
+
+        case 'NEXT_ROUND': {
+          if (!currentRoomCode || !currentPlayerName) return;
+          await gameManager.nextRound(currentRoomCode, currentPlayerName);
           break;
         }
 

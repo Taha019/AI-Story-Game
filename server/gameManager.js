@@ -1,11 +1,14 @@
 import { GeminiService } from './geminiService.js';
 
 export class Room {
-  constructor(code, hostPlayerName) {
+  constructor(code, hostPlayerName, totalRounds = 3) {
     this.code = code;
     this.host = hostPlayerName;
     this.players = new Map(); // playerName -> socket
     this.timerDuration = 300; // Default duration in seconds
+    this.totalRounds = [1, 2, 3, 5].includes(Number(totalRounds)) ? Number(totalRounds) : 3;
+    this.roundNumber = 0;
+    this.scoreTotals = new Map();
     this.status = 'WAITING'; // WAITING, WRITING, JUDGING, FINISHED
     this.currentPrompt = null;
     this.submissions = new Map(); // playerName -> story text string
@@ -61,13 +64,13 @@ export class GameManager {
     this.geminiService = new GeminiService();
   }
 
-  createRoom(hostPlayerName, socket) {
+  createRoom(hostPlayerName, socket, totalRounds) {
     let code;
     do {
       code = Math.floor(1000 + Math.random() * 9000).toString();
     } while (this.rooms.has(code));
 
-    const room = new Room(code, hostPlayerName);
+    const room = new Room(code, hostPlayerName, totalRounds);
     room.addPlayer(hostPlayerName, socket);
     this.rooms.set(code, room);
     return room;
@@ -98,11 +101,16 @@ export class GameManager {
     });
   }
 
-  async startRound(roomCode) {
+  async startRound(roomCode, playerName, isNextRound = false) {
     const room = this.rooms.get(roomCode);
     if (!room) throw new Error('Room not found.');
+    if (room.host !== playerName) throw new Error('Only the room host can start the game.');
+    if (room.status !== 'WAITING' || (isNextRound ? room.roundNumber < 2 : room.roundNumber !== 0)) {
+      throw new Error('The game has already started.');
+    }
 
     room.status = 'WRITING';
+    if (!isNextRound) room.roundNumber = 1;
     room.submissions.clear();
 
     // Request prompt/topic generation from AI service
@@ -131,6 +139,27 @@ export class GameManager {
         this.evaluateRound(roomCode);
       }
     }, 1000);
+  }
+
+  async nextRound(roomCode, playerName) {
+    const room = this.rooms.get(roomCode);
+    if (!room) throw new Error('Room not found.');
+    if (room.host !== playerName) throw new Error('Only the room host can start the next round.');
+    if (room.status !== 'FINISHED') throw new Error('The current round is not finished.');
+
+    if (room.roundNumber >= room.totalRounds) {
+      const standings = Array.from(room.scoreTotals, ([name, totalScore]) => ({
+        playerName: name,
+        totalScore
+      })).sort((first, second) => second.totalScore - first.totalScore);
+
+      room.broadcast({ type: 'GAME_OVER', standings });
+      return;
+    }
+
+    room.status = 'WAITING';
+    room.roundNumber += 1;
+    await this.startRound(roomCode, playerName, true);
   }
 
   submitStory(roomCode, playerName, story) {
@@ -167,8 +196,8 @@ export class GameManager {
     }));
 
     if (submissionsList.length === 0) {
-      room.status = 'WAITING';
-      room.broadcast({ type: 'GAME_OVER', evaluations: [], winner: 'No submissions received.' });
+      room.status = 'FINISHED';
+      room.broadcast({ type: 'GAME_OVER', standings: [], winner: 'No submissions received.' });
       return;
     }
 
@@ -181,10 +210,20 @@ export class GameManager {
         room.customMetrics
       );
 
+      for (const evaluation of evaluations) {
+        const roundScore = Number(evaluation.totalScore) || 0;
+        room.scoreTotals.set(
+          evaluation.playerName,
+          (room.scoreTotals.get(evaluation.playerName) || 0) + roundScore
+        );
+      }
+
       room.status = 'FINISHED';
       room.broadcast({
         type: 'ROUND_RESULTS',
         evaluations,
+        roundNumber: room.roundNumber,
+        totalRounds: room.totalRounds,
         status: 'FINISHED'
       });
     } catch (err) {
