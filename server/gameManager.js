@@ -15,6 +15,7 @@ export class Room {
       ? options.keywords.filter((keyword) => typeof keyword === 'string' && keyword.trim()).slice(0, 8)
       : [];
     this.roundNumber = 0;
+    this.promptTitles = [];
     this.scoreTotals = new Map();
     this.status = 'WAITING'; // WAITING, WRITING, JUDGING, FINISHED, GAME_OVER
     this.currentPrompt = null;
@@ -165,8 +166,10 @@ export class GameManager {
     // Request prompt/topic generation from AI service
     room.currentPrompt = await this.geminiService.generatePrompt({
       genre: room.genre,
-      keywords: room.keywords
+      keywords: room.keywords,
+      previousTitles: room.promptTitles
     });
+    room.promptTitles.push(room.currentPrompt.title);
     room.timeRemaining = room.timerDuration;
 
     room.broadcast({

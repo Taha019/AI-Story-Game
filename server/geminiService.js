@@ -1,3 +1,16 @@
+const FALLBACK_TITLES = [
+  "The Lantern at World's End",
+  'A Map of Quiet Storms',
+  'The Orchard Beneath the Sea',
+  'Letters from the Last Train',
+  'When the River Forgot',
+  'The Museum of Small Goodbyes',
+  'A City Built from Echoes',
+  'The Borrowed Sun',
+  'The Cartographer of Rain',
+  'An Atlas of Unfinished Things'
+];
+
 export class GeminiService {
   constructor(apiKey = process.env.GROQ_API_KEY) {
     this.apiKey = apiKey || process.env.GROQ_API_KEY;
@@ -6,13 +19,31 @@ export class GeminiService {
     this.model = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
   }
 
-  async generatePrompt({ genre = null, keywords = [] } = {}) {
-    const promptText = 'Generate 1 creative short story title. Respond strictly in valid JSON format with no extra markdown formatting: {"title": "..."}';
+  async generatePrompt({ genre = null, keywords = [], previousTitles = [] } = {}) {
+    const firstTitle = await this.requestStoryTitle(previousTitles);
+    let title = firstTitle;
+
+    if (isRepeatedTitle(title, previousTitles)) {
+      title = await this.requestStoryTitle([...previousTitles, title]);
+    }
+
+    if (isRepeatedTitle(title, previousTitles)) {
+      title = createFallbackTitle(previousTitles);
+    }
+
+    return { title, genre, keywords };
+  }
+
+  async requestStoryTitle(previousTitles) {
+    const excludedTitles = previousTitles.length
+      ? `Do not repeat or closely paraphrase these titles: ${previousTitles.join(' | ')}.`
+      : 'Choose an original, distinctive title; do not use "Clockwork".';
+    const promptText = `${excludedTitles} Generate exactly 1 fresh, creative short story title. Vary the imagery and phrasing. Respond strictly in valid JSON with no markdown: {"title": "..."}`;
     const response = await this.callAI(promptText, true);
-    if (!response || !response.title) {
+    if (!response || typeof response.title !== 'string' || !response.title.trim()) {
       throw new Error('Failed to parse title/prompt from AI response.');
     }
-    return { title: response.title, genre, keywords };
+    return response.title.trim();
   }
 
   async judgeStories(title, genre, keywords, submissions, customMetrics) {
@@ -132,4 +163,19 @@ Respond strictly in valid JSON format matching this exact structure:
     const text = data.choices?.[0]?.message?.content;
     return text ? JSON.parse(text) : null;
   }
+}
+
+function normalizeTitle(title) {
+  return String(title).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function isRepeatedTitle(title, previousTitles) {
+  const normalizedTitle = normalizeTitle(title);
+  return previousTitles.some((previousTitle) => normalizeTitle(previousTitle) === normalizedTitle);
+}
+
+function createFallbackTitle(previousTitles) {
+  const usedTitles = new Set(previousTitles.map(normalizeTitle));
+  const unusedTitle = FALLBACK_TITLES.find((candidate) => !usedTitles.has(normalizeTitle(candidate)));
+  return unusedTitle || `A New Story, Round ${previousTitles.length + 1}`;
 }
