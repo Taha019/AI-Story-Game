@@ -293,6 +293,8 @@ export class GameManager {
     room.broadcast({
       type: 'GAME_OVER',
       standings,
+      stories: [...room.storyHistory],
+      storyHistory: [...room.storyHistory],
       awards: report.awards || [],
       playerTraits: report.playerTraits || [],
       reportError: report.error || null
@@ -382,6 +384,7 @@ export class GameManager {
       room.broadcast({
         type: 'ROUND_RESULTS',
         evaluations,
+        stories: [...room.storyHistory],
         roundNumber: room.roundNumber,
         totalRounds: room.totalRounds,
         status: 'FINISHED'

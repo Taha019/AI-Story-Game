@@ -79,6 +79,25 @@ button:hover { background: var(--accent-hover); }
 .tag { background: #334155; padding: 0.3rem 0.6rem; border-radius: 20px; font-size: 0.85rem; }
 .timer { font-size: 1.5rem; font-weight: bold; color: var(--gold); text-align: center; margin: 1rem 0; }
 .result-card { background: #0f172a; border: 1px solid var(--border); padding: 1rem; border-radius: 8px; margin-bottom: 1rem; }
+.story-review-section { margin-top: 1.5rem; }
+.story-review-card {
+  background: #0f172a;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 0.8rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.story-review-card h4 { margin: 0 0 0.5rem; }
+.story-review-card p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  color: var(--text-main);
+  line-height: 1.5;
+}
 .award-card { background: #312e81; border: 1px solid #6366f1; padding: 1rem; border-radius: 8px; margin-bottom: 0.8rem; }
 .winner-banner { background: #312e81; border: 1px solid var(--gold); border-radius: 8px; color: var(--gold); font-size: 1.2rem; font-weight: bold; padding: 1rem; text-align: center; }
 

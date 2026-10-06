@@ -307,6 +307,7 @@ socket.onmessage = (event) => {
 
     case 'ROUND_RESULTS':
       renderResults(data.evaluations);
+      renderStoryReview(data.stories || [], 'round-story-review-container');
       document.getElementById('summary-round-title').innerText = `Round ${data.roundNumber} of ${data.totalRounds}`;
       if (nextRoundBtn) {
         nextRoundBtn.style.display = isHost ? '' : 'none';
@@ -318,6 +319,7 @@ socket.onmessage = (event) => {
 
     case 'GAME_OVER':
       renderFinalStandings(data.standings);
+      renderStoryReview(data.stories || data.storyHistory || [], 'final-story-review-container');
       renderAwardReport(data.awards, data.playerTraits, data.reportError);
       showView('view-final-results');
       break;
@@ -433,6 +435,21 @@ function setFinishButtonsDisabled(disabled, label) {
     button.disabled = disabled;
     button.innerText = label;
   });
+}
+
+function renderStoryReview(stories = [], containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  const entries = Array.isArray(stories) ? stories : [];
+  container.innerHTML = entries.length
+    ? entries.map((story) => `
+      <article class="story-review-card">
+        <h4>${escapeHtml(story.playerName)}${story.roundNumber ? ` · Round ${escapeHtml(story.roundNumber)}` : ''}</h4>
+        <p>${escapeHtml(story.story || 'No story submitted.')}</p>
+      </article>
+    `).join('')
+    : '<p>No stories to review yet.</p>';
 }
 
 function renderAwardReport(awards = [], playerTraits = [], reportError = '') {
