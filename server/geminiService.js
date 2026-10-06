@@ -3,7 +3,7 @@ export class GeminiService {
     this.apiKey = apiKey || process.env.GROQ_API_KEY;
 
     this.apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
-    this.model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+    this.model = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
   }
 
   async generatePrompt() {
