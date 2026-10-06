@@ -1,94 +1,74 @@
-import { WebSocketServer } from 'ws';
-import http from 'http';
 import express from 'express';
+import { createServer } from 'http';
+import { WebSocketServer } from 'ws';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
 import { GameManager } from './gameManager.js';
+
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const server = http.createServer(app);
+const server = createServer(app);
 const wss = new WebSocketServer({ server });
-
 const gameManager = new GameManager();
 
-const clientPath = path.join(__dirname, '../public');
+app.use(express.static(path.join(__dirname, '../public')));
 
-// Serve static client assets (HTML, CSS, JS)
-app.use(express.static(clientPath));
-
-// Fallback GET handler to ensure index.html is served for root or sub-routes
-app.get('*', (req, res) => {
-  res.sendFile(path.join(clientPath, 'index.html'));
-});
+let nextSocketId = 1;
 
 wss.on('connection', (ws) => {
-  let currentRoomCode = null;
-  let currentPlayerName = null;
+  ws.id = `user_${nextSocketId++}`;
 
   ws.on('message', async (message) => {
     try {
-      const data = JSON.parse(message);
-
-      switch (data.type) {
+      const payload = JSON.parse(message);
+      switch (payload.type) {
         case 'CREATE_ROOM': {
-          currentPlayerName = data.playerName;
-          const room = gameManager.createRoom(currentPlayerName, ws);
-          currentRoomCode = room.code;
-
-          ws.send(JSON.stringify({
-            type: 'ROOM_CREATED',
-            roomCode: room.code,
-            host: room.host,
-            players: room.getPlayerList(),
-            timerDuration: room.timerDuration
-          }));
+          const room = gameManager.createRoom(
+            ws,
+            payload.playerName,
+            payload.apiKey,
+            payload.totalRounds,
+            payload.metrics
+          );
+          ws.send(JSON.stringify({ type: 'ROOM_CREATED', roomCode: room.code, socketId: ws.id }));
+          gameManager.broadcastRoomUpdate(room);
           break;
         }
-
         case 'JOIN_ROOM': {
-          currentPlayerName = data.playerName;
-          currentRoomCode = data.roomCode;
-          const room = gameManager.joinRoom(currentRoomCode, currentPlayerName, ws);
-
-          room.broadcast({
-            type: 'PLAYER_JOINED',
-            players: room.getPlayerList(),
-            host: room.host,
-            timerDuration: room.timerDuration
-          });
+          const result = gameManager.joinRoom(payload.roomCode, ws, payload.playerName);
+          if (result.error) {
+            ws.send(JSON.stringify({ type: 'ERROR', message: result.error }));
+          } else {
+            ws.send(JSON.stringify({ type: 'ROOM_JOINED', roomCode: result.room.code, socketId: ws.id }));
+            gameManager.broadcastRoomUpdate(result.room);
+          }
           break;
         }
-
-        case 'UPDATE_ROOM_SETTINGS': {
-          if (!currentRoomCode || !currentPlayerName) return;
-          gameManager.setTimerDuration(currentRoomCode, currentPlayerName, data.timerDuration);
-          break;
-        }
-
         case 'START_GAME': {
-          if (!currentRoomCode) return;
-          await gameManager.startRound(currentRoomCode);
+          await gameManager.startRound(payload.roomCode);
           break;
         }
-
         case 'SUBMIT_STORY': {
-          if (!currentRoomCode || !currentPlayerName) return;
-          gameManager.submitStory(currentRoomCode, currentPlayerName, data.story);
+          gameManager.submitStory(payload.roomCode, ws.id, payload.story);
+          break;
+        }
+        case 'NEXT_ROUND': {
+          gameManager.advanceGame(payload.roomCode);
           break;
         }
       }
     } catch (err) {
-      ws.send(JSON.stringify({
-        type: 'ERROR',
-        message: err.message
-      }));
+      console.error('Socket message error:', err);
+      ws.send(JSON.stringify({ type: 'ERROR', message: err.message }));
     }
   });
 
-  ws.on('close', () => {
+ws.on('close', () => {
     if (currentRoomCode && currentPlayerName) {
       const room = gameManager.rooms.get(currentRoomCode);
       if (room) {
@@ -111,5 +91,5 @@ wss.on('connection', (ws) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });
