@@ -3,11 +3,12 @@ export class GeminiService {
     this.apiKey = apiKey || process.env.GROQ_API_KEY;
 
     if (!this.apiKey) {
-      throw new Error('GROQ_API_KEY is required to run the game.');
+      console.error('CRITICAL: GROQ_API_KEY is missing in process.env!');
+      throw new Error('GROQ_API_KEY environment variable is required.');
     }
 
     this.apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
-    this.model = 'openai/gpt-oss-120b';
+    this.model = 'llama-3.3-70b-versatile';
   }
 
   async generatePrompt() {
@@ -25,17 +26,20 @@ export class GeminiService {
       .join('\n\n');
 
     const metricsList = customMetrics
-      .map((m, i) => `${i + 1}. ${m.name}: ${m.description} (1-10)`)
+      .map((m, i) => `${i + 1}. ${m.name}: ${m.description} (Grade strictly between 1 and 10)`)
       .join('\n');
 
     const metricsJsonFields = customMetrics
       .map(m => `"${m.key}": 8`)
       .join(',\n          ');
 
-    const systemInstruction = `You are an expert literary judge. Grade each short story based on these custom criteria (1-10 scale each):
+    const systemInstruction = `You are an expert literary judge evaluating stories written simultaneously by multiple players.
+Grade EVERY submission on the following criteria. IMPORTANT: Each criterion MUST be an integer score out of 10 (1 = poor, 10 = exceptional):
+
 ${metricsList}
 
-Also provide a 1-sentence story summary and a 1-sentence constructive critique for each player.
+Also compute "totalScore" as the exact sum of all individual metric scores (e.g. if 3 criteria are graded 8, 7, 9, totalScore is 24).
+Include a 1-sentence story summary and a 1-sentence constructive critique for each player.
 
 Respond strictly in valid JSON format matching this exact structure:
 {
@@ -46,7 +50,8 @@ Respond strictly in valid JSON format matching this exact structure:
       "critique": "Short constructive critique...",
       "scores": {
           ${metricsJsonFields}
-      }
+      },
+      "totalScore": 24
     }
   ]
 }`;

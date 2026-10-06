@@ -1,189 +1,195 @@
 import { GeminiService } from './geminiService.js';
 
+export class Room {
+  constructor(code, hostPlayerName) {
+    this.code = code;
+    this.host = hostPlayerName;
+    this.players = new Map(); // playerName -> socket
+    this.timerDuration = 120; // Default round duration in seconds
+    this.status = 'WAITING'; // WAITING, WRITING, JUDGING, FINISHED
+    this.currentPrompt = null;
+    this.submissions = new Map(); // playerName -> story string
+    this.customMetrics = [
+      { key: 'creativity', name: 'Creativity', description: 'Originality and imaginative narrative elements.' },
+      { key: 'coherence', name: 'Coherence', description: 'Logical story flow and grammar quality.' },
+      { key: 'keywordUsage', name: 'Keyword Usage', description: 'Seamless incorporation of required words.' }
+    ];
+    this.timerInterval = null;
+    this.timeRemaining = 0;
+  }
+
+  addPlayer(playerName, socket) {
+    this.players.set(playerName, socket);
+  }
+
+  removePlayer(playerName) {
+    this.players.delete(playerName);
+    if (this.host === playerName && this.players.size > 0) {
+      this.host = Array.from(this.players.keys())[0];
+    }
+  }
+
+  setTimerDuration(seconds) {
+    const duration = parseInt(seconds, 10);
+    if (!isNaN(duration) && duration >= 30 && duration <= 600) {
+      this.timerDuration = duration;
+      return true;
+    }
+    return false;
+  }
+
+  getPlayerList() {
+    return Array.from(this.players.keys());
+  }
+
+  broadcast(message) {
+    const payload = JSON.stringify(message);
+    for (const socket of this.players.values()) {
+      if (socket.readyState === 1) { // WebSocket.OPEN
+        socket.send(payload);
+      }
+    }
+  }
+}
+
 export class GameManager {
   constructor() {
     this.rooms = new Map();
+    this.geminiService = new GeminiService();
   }
 
-  createRoom(hostSocket, hostName, totalRounds = 3, metrics = []) {
-    const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-    
-    // Default metrics if none provided
-    const defaultMetrics = [
-      { key: 'creativity', name: 'Creativity', description: 'Originality and imagery' },
-      { key: 'coherence', name: 'Coherence', description: 'Narrative flow and readability' },
-      { key: 'adherence', name: 'Adherence', description: 'Fit with prompt and required keywords' }
-    ];
+  createRoom(hostPlayerName, socket) {
+    let code;
+    do {
+      code = Math.floor(1000 + Math.random() * 9000).toString();
+    } while (this.rooms.has(code));
 
-    const room = {
-      code: roomCode,
-      apiKey: process.env.GEMINI_API_KEY,
-      status: 'LOBBY',
-      players: [{ id: hostSocket.id, name: hostName, socket: hostSocket, story: null, cumulativeScore: 0 }],
-      prompt: null,
-      currentTurnIndex: 0,
-      currentRound: 1,
-      totalRounds: parseInt(totalRounds, 10) || 3,
-      metrics: metrics.length > 0 ? metrics : defaultMetrics,
-      roundHistory: [], // stores per-round results
-      results: null
-    };
-    this.rooms.set(roomCode, room);
+    const room = new Room(code, hostPlayerName);
+    room.addPlayer(hostPlayerName, socket);
+    this.rooms.set(code, room);
     return room;
   }
 
-  joinRoom(roomCode, socket, playerName) {
-    const room = this.rooms.get(roomCode.toUpperCase());
-    if (!room) return { error: 'Room not found. Check your Lobby ID.' };
-    if (room.status !== 'LOBBY') return { error: 'Game already in progress.' };
-    if (room.players.length >= 5) return { error: 'Room is full (limit 5 players).' };
+  joinRoom(code, playerName, socket) {
+    const room = this.rooms.get(code);
+    if (!room) throw new Error('Room not found.');
+    if (room.status !== 'WAITING') throw new Error('Game already in progress.');
+    if (room.players.has(playerName)) throw new Error('Player name taken in this room.');
 
-    room.players.push({ id: socket.id, name: playerName, socket, story: null, cumulativeScore: 0 });
-    return { room };
+    room.addPlayer(playerName, socket);
+    return room;
+  }
+
+  setTimerDuration(roomCode, playerName, seconds) {
+    const room = this.rooms.get(roomCode);
+    if (!room) throw new Error('Room not found.');
+    if (room.host !== playerName) throw new Error('Only the host can update room settings.');
+    if (room.status !== 'WAITING') throw new Error('Cannot change settings during a game.');
+
+    const updated = room.setTimerDuration(seconds);
+    if (!updated) throw new Error('Invalid timer duration. Must be between 30 and 600 seconds.');
+
+    room.broadcast({
+      type: 'ROOM_SETTINGS_UPDATED',
+      timerDuration: room.timerDuration
+    });
   }
 
   async startRound(roomCode) {
     const room = this.rooms.get(roomCode);
-    if (!room || room.players.length < 2) return;
+    if (!room) throw new Error('Room not found.');
 
-    // Clear individual story submissions for the new round
-    room.players.forEach(p => p.story = null);
-
-    const gemini = new GeminiService(room.apiKey);
-    room.prompt = await gemini.generatePrompt();
     room.status = 'WRITING';
-    room.currentTurnIndex = 0;
-    this.broadcastRoomUpdate(room);
-  }
+    room.submissions.clear();
+    
+    // Fetch prompt from AI service
+    room.currentPrompt = await this.geminiService.generatePrompt();
+    room.timeRemaining = room.timerDuration;
 
-  submitStory(roomCode, playerId, storyText) {
-    const room = this.rooms.get(roomCode);
-    if (!room) return;
+    room.broadcast({
+      type: 'ROUND_STARTED',
+      prompt: room.currentPrompt,
+      duration: room.timerDuration,
+      status: room.status
+    });
 
-    const currentPlayer = room.players[room.currentTurnIndex];
-    if (currentPlayer && currentPlayer.id === playerId) {
-      currentPlayer.story = storyText;
-      this.nextTurn(room);
-    }
-  }
+    // Start live broadcast timer countdown
+    if (room.timerInterval) clearInterval(room.timerInterval);
+    room.timerInterval = setInterval(() => {
+      room.timeRemaining -= 1;
 
-  async nextTurn(room) {
-    room.currentTurnIndex++;
-    if (room.currentTurnIndex >= room.players.length) {
-      // All players finished writing -> trigger judging
-      room.status = 'JUDGING';
-      this.broadcastRoomUpdate(room);
-
-      try {
-        const gemini = new GeminiService(room.apiKey);
-        const submissions = room.players.map(p => ({ playerName: p.name, story: p.story || '' }));
-        const evaluations = await gemini.judgeStories(room.prompt.title, room.prompt.genre, room.prompt.keywords, submissions, room.metrics);
-
-        // Calculate scores and cumulative tally
-        const roundResults = evaluations.map(evalData => {
-          const scoreValues = Object.values(evalData.scores || {});
-          const roundTotal = scoreValues.reduce((acc, curr) => acc + (Number(curr) || 0), 0);
-          
-          // Add to player's persistent cumulative score
-          const player = room.players.find(p => p.name === evalData.playerName);
-          if (player) {
-            player.cumulativeScore += roundTotal;
-          }
-
-          return {
-            ...evalData,
-            roundTotal,
-            cumulativeScore: player ? player.cumulativeScore : roundTotal
-          };
-        }).sort((a, b) => b.roundTotal - a.roundTotal);
-
-        room.roundHistory.push({
-          round: room.currentRound,
-          prompt: room.prompt,
-          results: roundResults
-        });
-
-        room.status = 'ROUND_SUMMARY';
-      } catch (err) {
-        console.error('Judging failed:', err);
-        room.status = 'ERROR';
-        room.errorMessage = err.message;
-      }
-    }
-    this.broadcastRoomUpdate(room);
-  }
-
-  advanceGame(roomCode) {
-    const room = this.rooms.get(roomCode);
-    if (!room) return;
-
-    if (room.currentRound < room.totalRounds) {
-      room.currentRound++;
-      this.startRound(roomCode);
-    } else {
-      // Game ended -> calculate final totals and awards
-      room.status = 'FINAL_RESULTS';
-      room.finalLeaderboard = [...room.players].sort((a, b) => b.cumulativeScore - a.cumulativeScore);
-      room.awards = this.calculateAwards(room.roundHistory);
-      this.broadcastRoomUpdate(room);
-    }
-  }
-
-  calculateAwards(roundHistory) {
-    let highestRoundScore = -1;
-    let bestStoryWinner = '';
-    let bestStoryTitle = '';
-
-    roundHistory.forEach(r => {
-      r.results.forEach(res => {
-        if (res.roundTotal > highestRoundScore) {
-          highestRoundScore = res.roundTotal;
-          bestStoryWinner = res.playerName;
-          bestStoryTitle = r.prompt.title;
-        }
+      room.broadcast({
+        type: 'TIMER_TICK',
+        timeRemaining: room.timeRemaining
       });
-    });
 
-    return [
-      { title: '🏆 Ultimate Champion', recipient: roundHistory[roundHistory.length - 1]?.results[0]?.playerName || 'N/A', desc: 'Highest overall score across all rounds.' },
-      { title: '⭐ Master Storyteller', recipient: bestStoryWinner, desc: `Scored the highest single round entry (${highestRoundScore} pts) on "${bestStoryTitle}".` }
-    ];
+      if (room.timeRemaining <= 0) {
+        clearInterval(room.timerInterval);
+        this.evaluateRound(roomCode);
+      }
+    }, 1000);
   }
 
-  broadcastRoomUpdate(room) {
-    const payload = JSON.stringify({
-      type: 'ROOM_UPDATE',
-      data: {
-        code: room.code,
-        status: room.status,
-        currentRound: room.currentRound,
-        totalRounds: room.totalRounds,
-        metrics: room.metrics,
-        prompt: room.prompt,
-        players: room.players.map(p => ({ name: p.name, cumulativeScore: p.cumulativeScore, hasSubmitted: !!p.story })),
-        activePlayerName: room.players[room.currentTurnIndex]?.name,
-        activePlayerId: room.players[room.currentTurnIndex]?.id,
-        roundHistory: room.roundHistory,
-        finalLeaderboard: room.finalLeaderboard,
-        awards: room.awards,
-        errorMessage: room.errorMessage || null
-      }
+  submitStory(roomCode, playerName, story) {
+    const room = this.rooms.get(roomCode);
+    if (!room) throw new Error('Room not found.');
+    if (room.status !== 'WRITING') throw new Error('Not in writing phase.');
+
+    room.submissions.set(playerName, story);
+
+    room.broadcast({
+      type: 'PLAYER_SUBMITTED',
+      playerName,
+      submittedCount: room.submissions.size,
+      totalPlayers: room.players.size
     });
-    room.players.forEach(p => p.socket.send(payload));
+
+    // Automatically trigger judging if all active players submitted before timer ends
+    if (room.submissions.size >= room.players.size) {
+      if (room.timerInterval) clearInterval(room.timerInterval);
+      this.evaluateRound(roomCode);
+    }
   }
 
-  handleDisconnect(socketId) {
-    for (const [code, room] of this.rooms.entries()) {
-      const idx = room.players.findIndex(p => p.id === socketId);
-      if (idx !== -1) {
-        room.players.splice(idx, 1);
-        if (room.players.length === 0) {
-          this.rooms.delete(code);
-        } else {
-          this.broadcastRoomUpdate(room);
-        }
-        break;
-      }
+  async evaluateRound(roomCode) {
+    const room = this.rooms.get(roomCode);
+    if (!room || room.status === 'JUDGING') return;
+
+    room.status = 'JUDGING';
+    room.broadcast({ type: 'ROUND_JUDGING', status: 'Evaluating stories...' });
+
+    const submissionsList = Array.from(room.submissions.entries()).map(([playerName, story]) => ({
+      playerName,
+      story
+    }));
+
+    if (submissionsList.length === 0) {
+      room.status = 'WAITING';
+      room.broadcast({ type: 'GAME_OVER', evaluations: [], winner: 'No submissions received.' });
+      return;
+    }
+
+    try {
+      const evaluations = await this.geminiService.judgeStories(
+        room.currentPrompt.title,
+        room.currentPrompt.genre,
+        room.currentPrompt.keywords,
+        submissionsList,
+        room.customMetrics
+      );
+
+      room.status = 'FINISHED';
+      room.broadcast({
+        type: 'ROUND_RESULTS',
+        evaluations,
+        status: 'FINISHED'
+      });
+    } catch (err) {
+      room.status = 'WAITING';
+      room.broadcast({
+        type: 'ERROR',
+        message: `Judging failed: ${err.message}`
+      });
     }
   }
 }
