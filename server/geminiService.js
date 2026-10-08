@@ -11,6 +11,12 @@ const FALLBACK_TITLES = [
   'An Atlas of Unfinished Things'
 ];
 
+const TITLE_DIFFICULTY_INSTRUCTIONS = {
+  easy: 'Make the title simple, direct, clear, and immediately understandable',
+  medium: 'Make the title, direct, simple, with a balanced mix of creativity and readability.',
+  hard: 'Make the title more layered, ambiguous, and literary; use metaphor, subtle tension, and a more challenging tone.'
+};
+
 export class GeminiService {
   constructor(apiKey = process.env.GROQ_API_KEY) {
     this.apiKey = apiKey || process.env.GROQ_API_KEY;
@@ -19,26 +25,29 @@ export class GeminiService {
     this.model = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
   }
 
-  async generatePrompt({ genre = null, keywords = [], previousTitles = [] } = {}) {
-    const firstTitle = await this.requestStoryTitle(previousTitles);
+  async generatePrompt({ genre = null, keywords = [], previousTitles = [], titleDifficulty = 'medium' } = {}) {
+    const normalizedDifficulty = normalizeTitleDifficulty(titleDifficulty);
+    const firstTitle = await this.requestStoryTitle(previousTitles, normalizedDifficulty);
     let title = firstTitle;
 
     if (isRepeatedTitle(title, previousTitles)) {
-      title = await this.requestStoryTitle([...previousTitles, title]);
+      title = await this.requestStoryTitle([...previousTitles, title], normalizedDifficulty);
     }
 
     if (isRepeatedTitle(title, previousTitles)) {
       title = createFallbackTitle(previousTitles);
     }
 
-    return { title, genre, keywords };
+    return { title, genre, keywords, titleDifficulty: normalizedDifficulty };
   }
 
-  async requestStoryTitle(previousTitles) {
+  async requestStoryTitle(previousTitles, titleDifficulty = 'medium') {
+    const normalizedDifficulty = normalizeTitleDifficulty(titleDifficulty);
     const excludedTitles = previousTitles.length
       ? `Do not repeat or closely paraphrase these titles: ${previousTitles.join(' | ')}.`
-      : 'Choose an original, distinctive title; do not use "Clockwork".';
-    const promptText = `${excludedTitles} Generate exactly 1 fresh, creative short story title. Vary the imagery and phrasing. Respond strictly in valid JSON with no markdown: {"title": "..."}`;
+      : 'Choose an original, distinctive title.';
+    const difficultyInstruction = TITLE_DIFFICULTY_INSTRUCTIONS[normalizedDifficulty] || TITLE_DIFFICULTY_INSTRUCTIONS.medium;
+    const promptText = `${excludedTitles} ${difficultyInstruction} Generate exactly 1 fresh, creative short story title. Respond strictly in valid JSON with no markdown: {"title": "..."}`;
     const response = await this.callAI(promptText, true);
     if (!response || typeof response.title !== 'string' || !response.title.trim()) {
       throw new Error('Failed to parse title/prompt from AI response.');
@@ -163,6 +172,11 @@ Respond strictly in valid JSON format matching this exact structure:
     const text = data.choices?.[0]?.message?.content;
     return text ? JSON.parse(text) : null;
   }
+}
+
+function normalizeTitleDifficulty(value) {
+  const difficulty = typeof value === 'string' ? value.trim().toLowerCase() : 'medium';
+  return ['easy', 'medium', 'hard'].includes(difficulty) ? difficulty : 'medium';
 }
 
 function normalizeTitle(title) {

@@ -70,7 +70,8 @@ wss.on('connection', (ws) => {
             keywords,
             singleDevice,
             playerNames,
-            metrics: data.metrics
+            metrics: data.metrics,
+            titleDifficulty: data.titleDifficulty
           });
           currentRoomCode = room.code;
 

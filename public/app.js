@@ -25,6 +25,7 @@ const addMetricBtn = document.getElementById('btn-add-metric');
 const judgingMetricsList = document.getElementById('judging-metrics-list');
 const genreInput = document.getElementById('genre-input');
 const keywordsInput = document.getElementById('keywords-input');
+const titleDifficultyInput = document.getElementById('title-difficulty');
 const submitBtn = document.getElementById('btn-submit-story');
 const nextRoundBtn = document.getElementById('btn-next-round');
 const finishWritingBtn = document.getElementById('btn-finish-writing');
@@ -72,6 +73,7 @@ if (createBtn) {
       timerDuration,
       genre: genreInput.value.trim(),
       keywords: keywordsInput.value.trim(),
+      titleDifficulty: titleDifficultyInput ? titleDifficultyInput.value : 'medium',
       singleDevice,
       playerNames,
       metrics: metrics.length ? metrics : undefined

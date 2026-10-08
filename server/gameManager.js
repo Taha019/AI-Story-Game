@@ -15,6 +15,7 @@ export class Room {
     this.keywords = Array.isArray(options.keywords)
       ? options.keywords.filter((keyword) => typeof keyword === 'string' && keyword.trim()).slice(0, 8)
       : [];
+    this.titleDifficulty = normalizeTitleDifficulty(options.titleDifficulty);
     this.roundNumber = 0;
     this.promptTitles = [];
     this.scoreTotals = new Map();
@@ -24,30 +25,63 @@ export class Room {
     this.storyHistory = [];
     this.endGameRequested = false;
     
-    const defaultMetrics = [
-      { key: 'Structured Chaos', name: 'Structured Chaos', description: 'Unpredictable, wild elements that follow the internal logic of the world.' },
-      { key: 'Conceptual Originality', name: 'Conceptual Originality', description: 'Fresh, unexpected premises that take daring creative risks.' },
-      { key: 'Atmospheric Immersion', name: 'Atmospheric Immersion', description: 'Strong sensory detail, tone, and tactile setting work.' },
-      { key: 'Narrative Velocity and Flow', name: 'Narrative Velocity & Flow', description: 'Crisp pacing, readability, and momentum without narrative roadblocks.' },
-      { key: 'Emotional Resonance or Comedic Landing', name: 'Emotional Resonance or Comedic Landing', description: 'A genuine intended impact, whether a hard-hitting punchline or quiet resonance.' },
-      { key: 'Character Anchoring', name: 'Character Anchoring', description: 'Distinct voices, clear motivations, and memorable presence.' },
-      { key: 'The Twist / Satisfying Payoff', name: 'The Twist / Satisfying Payoff', description: 'A climax or subversion that feels earned by the setup.' },
-      { key: 'Prompt Fidelity', name: 'Prompt Fidelity', description: 'Deep integration of the theme into the DNA of the story.' }
-    ];
-    if (this.keywords.length && options.metrics === undefined) {
-      defaultMetrics.push({
-        key: 'keywordUsage',
-        name: 'Keyword Usage',
-        description: 'Seamless incorporation of the required words.'
-      });
+  const defaultMetrics = [
+    {
+      key: 'prompt_fidelity',
+      name: 'Prompt & Constraint Integration',
+      description: 'Measures how deeply prompt seed elements are integrated into core narrative mechanics versus superficial mention.'
+    },
+    {
+      key: 'conceptual_originality',
+      name: 'Premise & Concept Originality',
+      description: 'Evaluates subversion of clichés, freshness of core premise, and creative willingness to take risks.'
+    },
+    {
+      key: 'narrative_velocity',
+      name: 'Pacing & Narrative Momentum',
+      description: 'Measures prose economy, active scene advancement, readability, and freedom from narrative roadblocks.'
+    },
+    {
+      key: 'atmospheric_depth',
+      name: 'Sensory Immersion & Atmosphere',
+      description: 'Assesses rich sensory details (tactile, visual, auditory) and consistent mood alignment.'
+    },
+    {
+      key: 'character_voice',
+      name: 'Character Voice & Agency',
+      description: 'Evaluates distinct dialogue, clear character motivations, and choices that actively influence outcomes.'
+    },
+    {
+      key: 'tonal_impact',
+      name: 'Emotional & Comedic Landing',
+      description: 'Measures structural delivery of intended tone—whether punchlines land or emotional beats carry weight.'
+    },
+    {
+      key: 'world_logic_chaos',
+      name: 'Coherent Wildness',
+      description: 'Evaluates how unpredictable, bizarre, or chaotic story developments remain strictly bound by internal logic.'
+    },
+    {
+      key: 'payoff_and_resolution',
+      name: 'Setup & Payoff Integration',
+      description: 'Scores how earned the climax, subversion, or final resolution feels relative to early setups.'
     }
-    this.customMetrics = options.metrics === undefined
-      ? defaultMetrics
-      : normalizeMetrics(options.metrics);
-    
-    this.timerInterval = null;
-    this.submissionTimeout = null;
-    this.timeRemaining = 0;
+  ];
+  
+  if (this.keywords.length && options.metrics === undefined) {
+    defaultMetrics.push({
+      key: 'keywordUsage',
+      name: 'Keyword Usage',
+      description: 'Seamless incorporation of the required words.'
+    });
+  }
+  this.customMetrics = options.metrics === undefined
+    ? defaultMetrics
+    : normalizeMetrics(options.metrics);
+  
+  this.timerInterval = null;
+  this.submissionTimeout = null;
+  this.timeRemaining = 0;
   }
 
   addPlayer(playerName, socket) {
@@ -107,6 +141,11 @@ function normalizeMetrics(metrics) {
     keys.add(key);
     return { key, name, description };
   });
+}
+
+function normalizeTitleDifficulty(value) {
+  const difficulty = typeof value === 'string' ? value.trim().toLowerCase() : 'medium';
+  return ['easy', 'medium', 'hard'].includes(difficulty) ? difficulty : 'medium';
 }
 
 export class GameManager {
@@ -175,7 +214,8 @@ export class GameManager {
     room.currentPrompt = await this.geminiService.generatePrompt({
       genre: room.genre,
       keywords: room.keywords,
-      previousTitles: room.promptTitles
+      previousTitles: room.promptTitles,
+      titleDifficulty: room.titleDifficulty
     });
     room.promptTitles.push(room.currentPrompt.title);
     room.timeRemaining = room.timerDuration;

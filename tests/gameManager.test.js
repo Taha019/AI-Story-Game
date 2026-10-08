@@ -34,3 +34,20 @@ test('completeGame includes all submitted stories in the final payload', async (
   assert.deepEqual(room.lastBroadcast.stories, room.storyHistory);
   assert.equal(room.lastBroadcast.stories.length, 2);
 });
+
+test('generatePrompt honors the requested title difficulty', async () => {
+  const gameManager = new GameManager();
+  const service = gameManager.geminiService;
+
+  service.requestStoryTitle = async (previousTitles, difficulty) => {
+    assert.deepEqual(previousTitles, []);
+    assert.equal(difficulty, 'hard');
+    return 'The Clockmaker of Ash';
+  };
+
+  const prompt = await service.generatePrompt({ previousTitles: [], titleDifficulty: 'hard' });
+
+  assert.equal(prompt.title, 'The Clockmaker of Ash');
+  assert.equal(prompt.genre, null);
+  assert.equal(prompt.titleDifficulty, 'hard');
+});
