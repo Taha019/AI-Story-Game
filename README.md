@@ -1,4 +1,16 @@
-# Ink & Intellect
+# AetherTales
+
+The hourglass turns, the shadows start to climb,
+Inside The Loreforge of Forgotten Realms,
+Where words are spun against the ticking time.
+
+The arbiter waits at the heavy doors,
+To hold The High Verdict of the Lore,
+And judge the outcome of these fleeting wars.
+
+For every story is a thread of light,
+Woven fast within the fading spark,
+Where Legends Collide in Time tonight.
 
 A real-time, multiplayer AI storytelling game. A host creates a room, invites players with a four-digit code, and starts timed writing rounds. Groq generates story prompts, judges submissions against the room's criteria, and can generate end-of-game awards and story-based player impressions.
 

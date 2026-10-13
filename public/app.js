@@ -1,7 +1,21 @@
 const socketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 const socket = new WebSocket(`${socketProtocol}//${window.location.host}`);
+const themeAudio = document.getElementById('theme-audio');
 let pendingSocketMessage = null;
 const MAX_TIMER_DURATION_SECONDS = 1800;
+
+if (themeAudio) {
+  const startThemeAudio = () => {
+    themeAudio.play().catch(() => {});
+  };
+
+  // Any ONE of these works — they all count as user gestures:
+  document.addEventListener('click', startThemeAudio, { once: true });
+  // or:
+  // document.addEventListener('keydown', startThemeAudio, { once: true });
+  // or:
+  // document.addEventListener('touchstart', startThemeAudio, { once: true });
+}   
 
 let roomCode = null;
 let playerName = null;
@@ -378,7 +392,12 @@ function setConnectionStatus(message) {
 
 function updateLobby(players, timerDuration) {
   if (playerListDisplay) {
-    playerListDisplay.innerHTML = players.map(p => `<li>${p}</li>`).join('');
+    playerListDisplay.replaceChildren(...players.map((player) => {
+      const tag = document.createElement('span');
+      tag.className = 'tag';
+      tag.textContent = player;
+      return tag;
+    }));
   }
   if (timerInput) timerInput.value = timerDuration;
   if (roomTimerInput) roomTimerInput.value = timerDuration;
