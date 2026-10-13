@@ -26,46 +26,56 @@ export class Room {
     this.endGameRequested = false;
     
   const defaultMetrics = [
-    {
-      key: 'prompt_fidelity',
-      name: 'Prompt & Constraint Integration',
-      description: 'Measures how deeply prompt seed elements are integrated into core narrative mechanics versus superficial mention.'
-    },
-    {
-      key: 'conceptual_originality',
-      name: 'Premise & Concept Originality',
-      description: 'Evaluates subversion of clichés, freshness of core premise, and creative willingness to take risks.'
-    },
-    {
-      key: 'narrative_velocity',
-      name: 'Pacing & Narrative Momentum',
-      description: 'Measures prose economy, active scene advancement, readability, and freedom from narrative roadblocks.'
-    },
-    {
-      key: 'atmospheric_depth',
-      name: 'Sensory Immersion & Atmosphere',
-      description: 'Assesses rich sensory details (tactile, visual, auditory) and consistent mood alignment.'
-    },
-    {
-      key: 'character_voice',
-      name: 'Character Voice & Agency',
-      description: 'Evaluates distinct dialogue, clear character motivations, and choices that actively influence outcomes.'
-    },
-    {
-      key: 'tonal_impact',
-      name: 'Emotional & Comedic Landing',
-      description: 'Measures structural delivery of intended tone—whether punchlines land or emotional beats carry weight.'
-    },
-    {
-      key: 'world_logic_chaos',
-      name: 'Coherent Wildness',
-      description: 'Evaluates how unpredictable, bizarre, or chaotic story developments remain strictly bound by internal logic.'
-    },
-    {
-      key: 'payoff_and_resolution',
-      name: 'Setup & Payoff Integration',
-      description: 'Scores how earned the climax, subversion, or final resolution feels relative to early setups.'
-    }
+ {
+    key: 'constraint_engine',
+    name: 'Load-Bearing Prompt Integration',
+    description: 'Evaluate if the required prompt elements serve as load-bearing narrative mechanisms (driving the core conflict, character motive, or resolution) versus superficial namedrops. High score: Removing the prompt destroys the story logic. Low score: Prompt elements feel tacked-on, cosmetic, or isolated.'
+  },
+  {
+    key: 'premise_ambition',
+    name: 'Conceptual Subversion & Risk',
+    description: 'Assess the originality of the premise and willingness to take narrative risks. High score: Subverts predictable prompt interpretations, avoids cliché tropes, or executes a bold structural/perspective twist. Low score: Delivers the most literal, cliché, or predictable implementation of the prompt.'
+  },
+  {
+    key: 'in_media_res',
+    name: 'Hook & Immediate Entry Momentum',
+    description: 'Evaluate entry speed and scene engagement in the first 20% of the text. High score: Drops the reader directly into active stakes, tense atmosphere, or immediate conflict without preamble. Low score: Relies on front-loaded exposition dumps, warm-up backstory, or "waking up" clichés.'
+  },
+  {
+    key: 'prose_economy',
+    name: 'Word-Economy & Line Precision',
+    description: 'Measure sentence-level efficiency, rhythm, and lack of filler. High score: Concise prose where every word contributes to plot, mood, or character; zero fluff or purple prose. Low score: Repetitive phrasing, excessive filter words (e.g., "she saw," "he felt"), or verbose, slow-moving descriptions.'
+  },
+  {
+    key: 'sensory_anchoring',
+    name: 'Sensory Texture & Scene Anchoring',
+    description: 'Evaluate multi-sensory detail beyond basic visual description. High score: Uses rich tactile, auditory, olfactory, or kinesthetic anchors to instantly establish a concrete setting without slowing pace. Low score: "White-room syndrome" where dialogue and action occur in an abstract, ungrounded vacuum.'
+  },
+  {
+    key: 'voice_and_subtext',
+    name: 'Dialogue Cadence & Subtext',
+    description: 'Assess character speech uniqueness and conversational subtext. High score: Characters have distinct rhythms, idioms, and sentence structures; tension exists in what remains unsaid. Low score: Interchangeable character voices, on-the-nose dialogue used purely as exposition, or robotic back-and-forth.'
+  },
+  {
+    key: 'pivotal_agency',
+    name: 'Single-Choice Agency & Causality',
+    description: 'Assess character-driven plot turning points. High score: The climax or shift is a direct, causal consequence of an active choice or decision made by the protagonist. Low score: The protagonist is passive, an observer, or saved by external coincidence, accident, or deus ex machina.'
+  },
+  {
+    key: 'tonal_landing',
+    name: 'Targeted Tonal Execution',
+    description: 'Measure how effectively the narrative achieves its intended emotional tone (comedy, horror, tragedy, surrealism). High score: Precise execution—punchlines hit, tension builds predictably, or tragedy carries genuine weight. Low score: Tonal dissonance (e.g., unintended comedy during serious moments or flat humor).'
+  },
+  {
+    key: 'internal_cohesion',
+    name: 'Rule-Bound Internal Logic',
+    description: 'Evaluate structural consistency within the story’s established universe. High score: Even chaotic, surreal, or sci-fi elements operate under strict, predictable internal rules once established. Low score: Arbitrary plot twists, inconsistent magic/world rules, or illogical character actions that break the world’s logic.'
+  },
+  {
+    key: 'thematic_resonance',
+    name: 'Setup-to-Payoff Symmetry',
+    description: 'Assess how earned and satisfying the ending feels relative to early setups. High score: The final turn, twist, or closing image echoes early foreshadowing and provides thematic payoff. Low score: Abrupt endings ("it was all a dream"), unearned twists out of nowhere, or unresolved plot threads.'
+  }
   ];
   
   if (this.keywords.length && options.metrics === undefined) {
