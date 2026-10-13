@@ -1,4 +1,4 @@
-# AetherTales
+# Ink Arena
 
 The hourglass turns, the shadows start to climb,
 Inside The Loreforge of Forgotten Realms,
