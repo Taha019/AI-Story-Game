@@ -1,4 +1,4 @@
-# Ink Arena
+# Mythic Lore: Clash of Scribes
 
 The hourglass turns, the shadows start to climb,
 Inside The Loreforge of Forgotten Realms,
